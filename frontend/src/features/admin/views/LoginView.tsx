@@ -37,7 +37,7 @@ export function LoginView({ onSignIn }: { onSignIn: () => void }) {
               <span className="input-wrap"><input type="email" value={vm.email} onChange={(event) => vm.setEmail(event.target.value)} required /><Icon name="users" size={16} /></span>
             </label>
             <label className="field-label">Password
-              <span className="input-wrap"><input type={vm.passwordVisible ? "text" : "password"} defaultValue="admin123" required /><button type="button" aria-label={vm.passwordVisible ? "Hide password" : "Show password"} onClick={vm.togglePasswordVisibility}><Icon name={vm.passwordVisible ? "eye-off" : "eye"} size={16} /></button></span>
+              <span className="input-wrap"><input type={vm.passwordVisible ? "text" : "password"} value={vm.password} onChange={(event) => vm.setPassword(event.target.value)} required /><button type="button" aria-label={vm.passwordVisible ? "Hide password" : "Show password"} onClick={vm.togglePasswordVisibility}><Icon name={vm.passwordVisible ? "eye-off" : "eye"} size={16} /></button></span>
             </label>
             <div className="login-options"><label className="check-label"><input type="checkbox" defaultChecked /> <span>Remember me</span></label><button type="button" className="text-button">Forgot password?</button></div>
             <button className="primary-button primary-button--full" type="submit"><span>Continue to dashboard</span><Icon name="arrow-right" size={18} /></button>
