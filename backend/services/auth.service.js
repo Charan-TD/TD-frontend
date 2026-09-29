@@ -44,18 +44,22 @@ export const loginEmployee = async (email, password) => {
   }
 
   // 4. Get employee role and permissions
-  const authorization = await getEmployeeAuthorization(
-    employee.id
+const authorization = await getEmployeeAuthorization(
+  employee.id
+);
+
+if (authorization.length === 0) {
+  throw new AppError(
+    "No active role assigned to this employee",
+    403
   );
+}
 
-  // 5. Get employee role
-  const role = authorization.length > 0
-    ? {
-        id: authorization[0].role_id,
-        name: authorization[0].role_name
-      }
-    : null;
-
+// 5. Get employee role
+const role = {
+  id: authorization[0].role_id,
+  name: authorization[0].role_name
+};
   // 6. Generate access token
   const accessToken = generateAccessToken({
   sub: employee.id,

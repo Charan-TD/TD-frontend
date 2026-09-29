@@ -10,7 +10,7 @@ export const findEmployeeByEmail = async (email) => {
       e.emp_id,
       e.password_hash,
       e.status,
-      e.profile_img_url
+      e.profile_img_url,
       e.token_version
     FROM employees e
     WHERE e.email = $1
