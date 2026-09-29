@@ -25,22 +25,26 @@ export const loginEmployee = async (email, password) => {
   const employee = await findEmployeeByEmail(email);
 
   if (!employee) {
-    throw new AppError("Invalid email or password");
+    throw new AppError("Invalid email or password", 401);
   }
 
   // 2. Check employee status
   if (employee.status !== "active") {
-    throw new AppError("Employee account is not active");
+    throw new AppError("Employee account is not active", 403);
   }
 
   // 3. Verify password using Argon2
+  if (!employee.password_hash) {
+    throw new AppError("Invalid email or password", 401);
+  }
+
   const passwordValid = await verifyPassword(
     password,
     employee.password_hash
   );
 
   if (!passwordValid) {
-    throw new AppError("Invalid email or password");
+    throw new AppError("Invalid email or password", 401);
   }
 
   // 4. Get employee role and permissions
@@ -58,20 +62,20 @@ export const loginEmployee = async (email, password) => {
 
   // 6. Generate access token
   const accessToken = generateAccessToken({
-  sub: employee.id,
-  user_type: "employee",
-  role_id: role.id,
-  token_type: "access",
-  token_version: employee.token_version
-});
+    sub: employee.id,
+    user_type: "employee",
+    role_id: role?.id || null,
+    token_type: "access",
+    token_version: employee.token_version
+  });
 
-const refreshToken = generateRefreshToken({
-  sub: employee.id,
-  user_type: "employee",
-  role_id: role.id,
-  token_type: "refresh",
-  token_version: employee.token_version
-});
+  const refreshToken = generateRefreshToken({
+    sub: employee.id,
+    user_type: "employee",
+    role_id: role?.id || null,
+    token_type: "refresh",
+    token_version: employee.token_version
+  });
 
   // 8. Return login result
   return {
