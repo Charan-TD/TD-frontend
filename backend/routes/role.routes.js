@@ -1,0 +1,246 @@
+import express from "express";
+
+import {
+  getRoles,
+  getRoleById,
+  createRoleController,
+  updateRoleController,
+  deleteRoleController
+} from "../controllers/role.controller.js";
+
+import {
+  validateCreateRole,
+  validateUpdateRole,
+  validateRoleId
+} from "../validators/role.validator.js";
+
+import { authenticate } from "../middleware/authenticate.js";
+import { authorize } from "../middleware/authorize.js";
+
+const router = express.Router();
+
+/**
+ * @swagger
+ * tags:
+ *   name: Roles
+ *   description: Role management APIs
+ */
+
+/**
+ * @swagger
+ * /api/v1/roles:
+ *   get:
+ *     summary: Get all roles
+ *     tags:
+ *       - Roles
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Roles retrieved successfully
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Permission denied
+ */
+router.get(
+  "/",
+  authenticate,
+  authorize("roles", "read"),
+  getRoles
+);
+
+/**
+ * @swagger
+ * /api/v1/roles/{id}:
+ *   get:
+ *     summary: Get role by ID
+ *     tags:
+ *       - Roles
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Role ID
+ *     responses:
+ *       200:
+ *         description: Role retrieved successfully
+ *       400:
+ *         description: Invalid role ID
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Permission denied
+ *       404:
+ *         description: Role not found
+ */
+router.get(
+  "/:id",
+  authenticate,
+  authorize("roles", "read"),
+  validateRoleId,
+  getRoleById
+);
+
+/**
+ * @swagger
+ * /api/v1/roles:
+ *   post:
+ *     summary: Create a role
+ *     tags:
+ *       - Roles
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - roleName
+ *             properties:
+ *               roleName:
+ *                 type: string
+ *                 example: Manager
+ *               description:
+ *                 type: string
+ *                 nullable: true
+ *                 example: Order manager
+ *               permissionIds:
+ *                 type: array
+ *                 description: IDs of permissions assigned to the role
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 example:
+ *                   - 550e8400-e29b-41d4-a716-446655440000
+ *                   - 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+ *     responses:
+ *       201:
+ *         description: Role created successfully
+ *       400:
+ *         description: Invalid role data
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Permission denied
+ *       409:
+ *         description: Role name already exists
+ */
+router.post(
+  "/",
+  authenticate,
+  authorize("roles", "insert"),
+  validateCreateRole,
+  createRoleController
+);
+
+/**
+ * @swagger
+ * /api/v1/roles/{id}:
+ *   patch:
+ *     summary: Update a role
+ *     tags:
+ *       - Roles
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Role ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               roleName:
+ *                 type: string
+ *                 example: Manager
+ *               description:
+ *                 type: string
+ *                 nullable: true
+ *                 example: Updated order manager
+ *               permissionIds:
+ *                 type: array
+ *                 description: Complete list of permission IDs assigned to the role
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 example:
+ *                   - 550e8400-e29b-41d4-a716-446655440000
+ *                   - 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+ *     responses:
+ *       200:
+ *         description: Role updated successfully
+ *       400:
+ *         description: Invalid role data
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Permission denied
+ *       404:
+ *         description: Role not found
+ *       409:
+ *         description: Role name already exists
+ */
+router.patch(
+  "/:id",
+  authenticate,
+  authorize("roles", "update"),
+  validateRoleId,
+  validateUpdateRole,
+  updateRoleController
+);
+
+/**
+ * @swagger
+ * /api/v1/roles/{id}:
+ *   delete:
+ *     summary: Delete a role
+ *     tags:
+ *       - Roles
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Role ID
+ *     responses:
+ *       200:
+ *         description: Role deleted successfully
+ *       400:
+ *         description: Invalid role ID
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Permission denied
+ *       404:
+ *         description: Role not found
+ *       409:
+ *         description: Role cannot be deleted because it is assigned to employees
+ */
+router.delete(
+  "/:id",
+  authenticate,
+  authorize("roles", "delete"),
+  validateRoleId,
+  deleteRoleController
+);
+
+export default router;

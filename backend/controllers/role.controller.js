@@ -1,0 +1,140 @@
+import {
+  listRoles,
+  getRole,
+  createRole,
+  updateRole,
+  deleteRole
+} from "../services/role.service.js";
+
+
+/**
+ * GET /roles
+ */
+export const getRoles = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const roles = await listRoles();
+
+    return res.status(200).json({
+      success: true,
+      data: roles
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/**
+ * GET /roles/:id
+ */
+export const getRoleById = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const role = await getRole(
+      req.params.id
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: role
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/**
+ * POST /roles
+ */
+export const createRoleController = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const {
+      roleName,
+      description,
+      permissions
+    } = req.body;
+
+    const role = await createRole({
+      roleName,
+      description,
+      permissions
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Role created successfully",
+      data: role
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/**
+ * PATCH /roles/:id
+ */
+export const updateRoleController = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const {
+      roleName,
+      description,
+      permissions
+    } = req.body;
+
+    const role = await updateRole({
+      roleId: req.params.id,
+      roleName,
+      description,
+      permissions
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Role updated successfully",
+      data: role
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/**
+ * DELETE /roles/:id
+ */
+export const deleteRoleController = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const result = await deleteRole(
+      req.params.id
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Role deleted successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};

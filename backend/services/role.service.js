@@ -1,0 +1,503 @@
+import {
+  getRoles,
+  getRoleById,
+  findRoleByName,
+  createRole as createRoleRepository,
+  updateRole as updateRoleRepository,
+  deleteRolePermissions,
+  addRolePermissions,
+  getPermissionsByIds,
+  getTransactionClient
+} from "../repositories/role.repository.js";
+
+import { AppError } from "../utils/app-error.js";
+
+
+/**
+ * Convert permission names into permission_code.
+ *
+ * Example:
+ *
+ * orders_read
+ * orders_update
+ * dashboard_read
+ *
+ * becomes:
+ *
+ * {
+ *   orders: ["read", "update"],
+ *   dashboard: ["read"]
+ * }
+ */
+const buildPermissionCode = (
+  permissionRows
+) => {
+  const permissionCode = {};
+
+  for (const permission of permissionRows) {
+    const permissionName =
+      permission.permission_name;
+
+    if (
+      typeof permissionName !== "string" ||
+      !permissionName.trim()
+    ) {
+      throw new AppError(
+        "Invalid permission name",
+        400
+      );
+    }
+
+    const separatorIndex =
+      permissionName.lastIndexOf("_");
+
+    if (separatorIndex === -1) {
+      throw new AppError(
+        `Invalid permission name: ${permissionName}`,
+        400
+      );
+    }
+
+    const resource =
+      permissionName.substring(
+        0,
+        separatorIndex
+      );
+
+    const action =
+      permissionName.substring(
+        separatorIndex + 1
+      );
+
+    if (
+      !resource ||
+      !action
+    ) {
+      throw new AppError(
+        `Invalid permission name: ${permissionName}`,
+        400
+      );
+    }
+
+    if (!permissionCode[resource]) {
+      permissionCode[resource] = [];
+    }
+
+    if (
+      !permissionCode[resource].includes(action)
+    ) {
+      permissionCode[resource].push(action);
+    }
+  }
+
+  return permissionCode;
+};
+
+
+/**
+ * Validate permission IDs and build
+ * the corresponding permission_code.
+ */
+const preparePermissions = async (
+  client,
+  permissionIds
+) => {
+  if (!Array.isArray(permissionIds)) {
+    throw new AppError(
+      "permissionIds must be an array",
+      400
+    );
+  }
+
+  const uniquePermissionIds =
+    [...new Set(permissionIds)];
+
+  if (
+    uniquePermissionIds.length !==
+    permissionIds.length
+  ) {
+    throw new AppError(
+      "Duplicate permission IDs are not allowed",
+      400
+    );
+  }
+
+  if (permissionIds.length === 0) {
+    return {
+      permissionIds: [],
+      permissionCode: {}
+    };
+  }
+
+  const permissionRows =
+    await getPermissionsByIds(
+      client,
+      permissionIds
+    );
+
+  if (
+    permissionRows.length !==
+    permissionIds.length
+  ) {
+    throw new AppError(
+      "One or more permission IDs are invalid",
+      400
+    );
+  }
+
+  const permissionCode =
+    buildPermissionCode(
+      permissionRows
+    );
+
+  return {
+    permissionIds,
+    permissionCode
+  };
+};
+
+
+/**
+ * Get all roles.
+ */
+export const listRoles = async () => {
+  return await getRoles();
+};
+
+
+/**
+ * Get one role.
+ */
+export const getRole = async (
+  roleId
+) => {
+  if (!roleId) {
+    throw new AppError(
+      "Role ID is required",
+      400
+    );
+  }
+
+  const role =
+    await getRoleById(roleId);
+
+  if (!role) {
+    throw new AppError(
+      "Role not found",
+      404
+    );
+  }
+
+  return role;
+};
+
+
+/**
+ * Create a role.
+ */
+export const createRole = async ({
+  roleName,
+  description = null,
+  permissionIds = []
+}) => {
+  if (
+    !roleName ||
+    typeof roleName !== "string" ||
+    !roleName.trim()
+  ) {
+    throw new AppError(
+      "Role name is required",
+      400
+    );
+  }
+
+  const normalizedRoleName =
+    roleName.trim();
+
+  const client =
+    await getTransactionClient();
+
+  try {
+    await client.query("BEGIN");
+
+    const existingRole =
+      await findRoleByName(
+        client,
+        normalizedRoleName
+      );
+
+    if (existingRole) {
+      throw new AppError(
+        "Role name already exists",
+        409
+      );
+    }
+
+    const {
+      permissionIds: validPermissionIds,
+      permissionCode
+    } = await preparePermissions(
+      client,
+      permissionIds
+    );
+
+    const role =
+      await createRoleRepository(
+        client,
+        {
+          roleName: normalizedRoleName,
+          description:
+            typeof description === "string"
+              ? description.trim() || null
+              : null,
+          permissionCode
+        }
+      );
+
+    await addRolePermissions(
+      client,
+      role.id,
+      validPermissionIds
+    );
+
+    await client.query("COMMIT");
+
+    return await getRoleById(
+      role.id
+    );
+  } catch (error) {
+    await client.query("ROLLBACK");
+
+    if (
+      error.code === "23505"
+    ) {
+      throw new AppError(
+        "Role name already exists",
+        409
+      );
+    }
+
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+
+/**
+ * Update a role.
+ */
+export const updateRole = async ({
+  roleId,
+  roleName,
+  description,
+  permissionIds
+}) => {
+  if (!roleId) {
+    throw new AppError(
+      "Role ID is required",
+      400
+    );
+  }
+
+  const client =
+    await getTransactionClient();
+
+  try {
+    await client.query("BEGIN");
+
+    const existingRole =
+      await getRoleById(roleId);
+
+    if (!existingRole) {
+      throw new AppError(
+        "Role not found",
+        404
+      );
+    }
+
+    if (
+      roleName !== undefined &&
+      (
+        typeof roleName !== "string" ||
+        !roleName.trim()
+      )
+    ) {
+      throw new AppError(
+        "Invalid role name",
+        400
+      );
+    }
+
+    let permissionCode;
+    let validPermissionIds;
+
+    if (
+      permissionIds !== undefined
+    ) {
+      const prepared =
+        await preparePermissions(
+          client,
+          permissionIds
+        );
+
+      permissionCode =
+        prepared.permissionCode;
+
+      validPermissionIds =
+        prepared.permissionIds;
+    }
+
+    const updatedRole =
+      await updateRoleRepository(
+        client,
+        roleId,
+        {
+          roleName:
+            roleName !== undefined
+              ? roleName.trim()
+              : undefined,
+
+          description:
+            description !== undefined
+              ? (
+                  typeof description === "string"
+                    ? description.trim() || null
+                    : null
+                )
+              : undefined,
+
+          permissionCode
+        }
+      );
+
+    if (!updatedRole) {
+      throw new AppError(
+        "Role not found",
+        404
+      );
+    }
+
+    /*
+     * Only replace permission assignments
+     * when permissionIds was actually supplied.
+     */
+    if (
+      permissionIds !== undefined
+    ) {
+      await deleteRolePermissions(
+        client,
+        roleId
+      );
+
+      await addRolePermissions(
+        client,
+        roleId,
+        validPermissionIds
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return await getRoleById(
+      roleId
+    );
+  } catch (error) {
+    await client.query("ROLLBACK");
+
+    if (
+      error.code === "23505"
+    ) {
+      throw new AppError(
+        "Role name already exists",
+        409
+      );
+    }
+
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+
+/**
+ * Delete a role.
+ */
+export const deleteRole = async (
+  roleId
+) => {
+  if (!roleId) {
+    throw new AppError(
+      "Role ID is required",
+      400
+    );
+  }
+
+  const client =
+    await getTransactionClient();
+
+  try {
+    await client.query("BEGIN");
+
+    const role =
+      await getRoleById(roleId);
+
+    if (!role) {
+      throw new AppError(
+        "Role not found",
+        404
+      );
+    }
+
+    /*
+     * Remove role-permission mappings first.
+     */
+    await deleteRolePermissions(
+      client,
+      roleId
+    );
+
+    const query = `
+      DELETE FROM roles
+      WHERE id = $1
+      RETURNING id
+    `;
+
+    const result =
+      await client.query(
+        query,
+        [roleId]
+      );
+
+    if (
+      result.rows.length === 0
+    ) {
+      throw new AppError(
+        "Role not found",
+        404
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return {
+      id: roleId
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+
+    if (
+      error.code === "23503"
+    ) {
+      throw new AppError(
+        "Role cannot be deleted because it is assigned to employees",
+        409
+      );
+    }
+
+    throw error;
+  } finally {
+    client.release();
+  }
+};

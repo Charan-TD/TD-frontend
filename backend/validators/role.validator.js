@@ -1,0 +1,200 @@
+import { validate as isUUID } from "uuid";
+
+
+/**
+ * Validate role ID from route params.
+ */
+export const validateRoleId = (
+  req,
+  res,
+  next
+) => {
+  const { id } = req.params;
+
+  if (!id || !isUUID(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid role ID"
+    });
+  }
+
+  next();
+};
+
+
+/**
+ * Validate permission IDs.
+ */
+const validatePermissionIds = (
+  permissionIds,
+  res
+) => {
+  if (!Array.isArray(permissionIds)) {
+    return res.status(400).json({
+      success: false,
+      message: "permissionIds must be an array"
+    });
+  }
+
+  const uniqueIds =
+    new Set(permissionIds);
+
+  if (
+    uniqueIds.size !==
+    permissionIds.length
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Duplicate permission IDs are not allowed"
+    });
+  }
+
+  for (const permissionId of permissionIds) {
+    if (
+      typeof permissionId !== "string" ||
+      !isUUID(permissionId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          `Invalid permission ID: ${permissionId}`
+      });
+    }
+  }
+
+  return null;
+};
+
+
+/**
+ * Validate create role request.
+ */
+export const validateCreateRole = (
+  req,
+  res,
+  next
+) => {
+  const {
+    roleName,
+    description,
+    permissionIds
+  } = req.body;
+
+  if (
+    typeof roleName !== "string" ||
+    !roleName.trim()
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Role name is required"
+    });
+  }
+
+  if (
+    description !== undefined &&
+    description !== null &&
+    typeof description !== "string"
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Description must be a string"
+    });
+  }
+
+  /*
+   * permissionIds is optional.
+   *
+   * If omitted, the role will have
+   * no permissions.
+   */
+  if (permissionIds !== undefined) {
+    const error =
+      validatePermissionIds(
+        permissionIds,
+        res
+      );
+
+    if (error) {
+      return error;
+    }
+  }
+
+  next();
+};
+
+
+/**
+ * Validate update role request.
+ */
+export const validateUpdateRole = (
+  req,
+  res,
+  next
+) => {
+  const {
+    roleName,
+    description,
+    permissionIds
+  } = req.body;
+
+  if (
+    roleName !== undefined &&
+    (
+      typeof roleName !== "string" ||
+      !roleName.trim()
+    )
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid role name"
+    });
+  }
+
+  if (
+    description !== undefined &&
+    description !== null &&
+    typeof description !== "string"
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Description must be a string"
+    });
+  }
+
+  /*
+   * If permissionIds is supplied,
+   * validate the complete array.
+   *
+   * Sending [] intentionally removes
+   * all permissions from the role.
+   */
+  if (permissionIds !== undefined) {
+    const error =
+      validatePermissionIds(
+        permissionIds,
+        res
+      );
+
+    if (error) {
+      return error;
+    }
+  }
+
+  /*
+   * PATCH must contain at least one
+   * field to update.
+   */
+  if (
+    roleName === undefined &&
+    description === undefined &&
+    permissionIds === undefined
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "At least one field is required for update"
+    });
+  }
+
+  next();
+};
