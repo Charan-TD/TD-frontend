@@ -1,11 +1,4 @@
 export const validateEmployeeLogin = (req, res, next) => {
-  if (!req.body) {
-    return res.status(400).json({
-      success: false,
-      message: "Request body is required"
-    });
-  }
-
   const { email, password } = req.body;
 
   if (!email || typeof email !== "string") {
@@ -15,17 +8,10 @@ export const validateEmployeeLogin = (req, res, next) => {
     });
   }
 
-  if (!password || typeof password !== "string" || !password.trim()) {
+  if (!password || typeof password !== "string") {
     return res.status(400).json({
       success: false,
       message: "Password is required"
-    });
-  }
-
-  if (password.length > 128) {
-    return res.status(400).json({
-      success: false,
-      message: "Password must not exceed 128 characters"
     });
   }
 

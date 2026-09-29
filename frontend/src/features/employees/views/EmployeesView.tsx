@@ -133,6 +133,7 @@ export function EmployeesView({
     if (!autoOpenCreate) return;
 
     resetForm();
+    setEmployeeId(vm.suggestedEmployeeId);
     setShowCreate(true);
     onAutoOpenHandled?.();
   }, [autoOpenCreate]);
@@ -188,6 +189,7 @@ export function EmployeesView({
             type="button"
             onClick={() => {
               resetForm();
+              setEmployeeId(vm.suggestedEmployeeId);
               setShowCreate(true);
             }}
           >
@@ -442,10 +444,9 @@ export function EmployeesView({
             />
 
             <small>
-              Last Employee ID:{" "}
+              Suggested Employee ID:{" "}
               <strong>
-                {vm.lastEmployeeId ??
-                  "No employees yet"}
+                {vm.suggestedEmployeeId}
               </strong>
             </small>
           </label>

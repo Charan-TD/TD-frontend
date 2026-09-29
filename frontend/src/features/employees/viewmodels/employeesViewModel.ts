@@ -83,6 +83,24 @@ export function useEmployeesViewModel() {
     data: lastEmployeeId,
   } =
     useGetLastEmployeeIdQuery();
+  const suggestedEmployeeId = useMemo(() => {
+    if (!lastEmployeeId) {
+      return "EMP-1001";
+    }
+
+    const match = lastEmployeeId.match(/(\d+)$/);
+
+    if (!match) {
+      return lastEmployeeId;
+    }
+
+    const number = Number(match[1]) + 1;
+
+    return `${lastEmployeeId.slice(
+      0,
+      -match[1].length
+    )}${number}`;
+  }, [lastEmployeeId]);
 
   const [
     createEmployee,
@@ -320,6 +338,7 @@ export function useEmployeesViewModel() {
     permissions,
 
     lastEmployeeId,
+    suggestedEmployeeId,
 
     query,
     setQuery,
