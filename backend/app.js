@@ -12,7 +12,7 @@ import restaurantRoutes from "./routes/restaurant.routes.js";
 import stationRoutes from "./routes/station.routes.js";
 import deliveryPartnerUserRoutes from "./routes/delivery-partner-user.routes.js";
 import orderRoutes from "./routes/order.routes.js";
-
+import roleRoutes from "./routes/role.routes.js";
 
 import swaggerSpec from "./config/swagger.js";
 
@@ -53,9 +53,6 @@ app.use("/api/v1/auth", authRoutes);
 
 app.use("/api/v1/employees", employeeRoutes);
 
-// Error handler must be the LAST middleware
-app.use(errorHandler);
-
 app.use(
   "/api/v1/employee-roles",
   employeeRoleRoutes
@@ -77,6 +74,12 @@ app.use(
   deliveryPartnerUserRoutes
 );
 
+
 app.use("/api/v1/orders", orderRoutes);
+
+app.use("/api/v1/roles", roleRoutes);
+
+// Error handler must be the LAST middleware
+app.use(errorHandler);
 
 export default app;
