@@ -32,10 +32,6 @@ const options = {
     description: "Permission management"
   },
   {
-  name: "Roles",
-  description: "Role management APIs"
-  },
-  {
     name: "Delivery Partner Users",
     description: "Delivery partner management"
   },
