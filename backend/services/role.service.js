@@ -1,3 +1,5 @@
+import {AppError} from "../utils/app-error.js";
+
 import {
   getRoles,
   getRoleById,
@@ -10,107 +12,36 @@ import {
   getTransactionClient
 } from "../repositories/role.repository.js";
 
-import { AppError } from "../utils/app-error.js";
 
-
-/**
- * Convert permission names into permission_code.
- *
- * Example:
- *
- * orders_read
- * orders_update
- * dashboard_read
- *
- * becomes:
- *
- * {
- *   orders: ["read", "update"],
- *   dashboard: ["read"]
- * }
- */
-const buildPermissionCode = (
-  permissionRows
-) => {
-  const permissionCode = {};
-
-  for (const permission of permissionRows) {
-    const permissionName =
-      permission.permission_name;
-
-    if (
-      typeof permissionName !== "string" ||
-      !permissionName.trim()
-    ) {
-      throw new AppError(
-        "Invalid permission name",
-        400
-      );
-    }
-
-    const separatorIndex =
-      permissionName.lastIndexOf("_");
-
-    if (separatorIndex === -1) {
-      throw new AppError(
-        `Invalid permission name: ${permissionName}`,
-        400
-      );
-    }
-
-    const resource =
-      permissionName.substring(
-        0,
-        separatorIndex
-      );
-
-    const action =
-      permissionName.substring(
-        separatorIndex + 1
-      );
-
-    if (
-      !resource ||
-      !action
-    ) {
-      throw new AppError(
-        `Invalid permission name: ${permissionName}`,
-        400
-      );
-    }
-
-    if (!permissionCode[resource]) {
-      permissionCode[resource] = [];
-    }
-
-    if (
-      !permissionCode[resource].includes(action)
-    ) {
-      permissionCode[resource].push(action);
-    }
+/*
+|--------------------------------------------------------------------------
+| Prepare and validate permissions
+|--------------------------------------------------------------------------
+*/
+const preparePermissions = async (client, permissions) => {
+  if (!Array.isArray(permissions)) {
+    throw new AppError("permissions must be an array", 400);
   }
 
-  return permissionCode;
-};
-
-
-/**
- * Validate permission IDs and build
- * the corresponding permission_code.
- */
-const preparePermissions = async (
-  client,
-  permissionIds
-) => {
-  if (!Array.isArray(permissionIds)) {
+  if (permissions.length === 0) {
     throw new AppError(
-      "permissionIds must be an array",
+      "At least one permission is required",
       400
     );
   }
 
-  const uniquePermissionIds =
-    [...new Set(permissionIds)];
+  /*
+  |--------------------------------------------------------------------------
+  | Validate duplicate permission IDs
+  |--------------------------------------------------------------------------
+  */
+  const permissionIds = permissions.map(
+    (permission) => permission.permissionId
+  );
+
+  const uniquePermissionIds = [
+    ...new Set(permissionIds)
+  ];
 
   if (
     uniquePermissionIds.length !==
@@ -122,64 +53,161 @@ const preparePermissions = async (
     );
   }
 
-  if (permissionIds.length === 0) {
-    return {
-      permissionIds: [],
-      permissionCode: {}
-    };
-  }
-
+  /*
+  |--------------------------------------------------------------------------
+  | Get permission resources from DB
+  |--------------------------------------------------------------------------
+  */
   const permissionRows =
     await getPermissionsByIds(
       client,
-      permissionIds
+      uniquePermissionIds
     );
 
   if (
     permissionRows.length !==
-    permissionIds.length
+    uniquePermissionIds.length
   ) {
+    const foundIds = new Set(
+      permissionRows.map(
+        (permission) => permission.id
+      )
+    );
+
+    const missingIds =
+      uniquePermissionIds.filter(
+        (id) => !foundIds.has(id)
+      );
+
     throw new AppError(
-      "One or more permission IDs are invalid",
+      `Permission IDs do not exist: ${missingIds.join(", ")}`,
       400
     );
   }
 
-  const permissionCode =
-    buildPermissionCode(
-      permissionRows
-    );
+  /*
+  |--------------------------------------------------------------------------
+  | Build permission_code
+  |--------------------------------------------------------------------------
+  */
+  const permissionCode = {};
+
+  for (const permission of permissions) {
+    const permissionRow =
+      permissionRows.find(
+        (row) =>
+          row.id === permission.permissionId
+      );
+
+    if (!permissionRow) {
+      throw new AppError(
+        `Permission not found: ${permission.permissionId}`,
+        400
+      );
+    }
+
+    const resource =
+      permissionRow.permission_name;
+
+    if (
+      !resource ||
+      typeof resource !== "string" ||
+      resource.trim().length === 0
+    ) {
+      throw new AppError(
+        `Invalid permission resource for ID: ${permission.permissionId}`,
+        400
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | permission_name must be resource only
+    |--------------------------------------------------------------------------
+    */
+    if (resource.includes("_")) {
+      throw new AppError(
+        `Invalid permission resource '${resource}'. permission_name must contain only the resource name.`,
+        400
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate actions
+    |--------------------------------------------------------------------------
+    */
+    if (!Array.isArray(permission.actions)) {
+      throw new AppError(
+        `Actions must be an array for '${resource}'`,
+        400
+      );
+    }
+
+    if (permission.actions.length === 0) {
+      throw new AppError(
+        `At least one action is required for '${resource}'`,
+        400
+      );
+    }
+
+    const allowedActions = [
+      "read",
+      "insert",
+      "update",
+      "delete"
+    ];
+
+    const invalidActions =
+      permission.actions.filter(
+        (action) =>
+          !allowedActions.includes(action)
+      );
+
+    if (invalidActions.length > 0) {
+      throw new AppError(
+        `Invalid action(s) for '${resource}': ${invalidActions.join(", ")}`,
+        400
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Remove duplicate actions
+    |--------------------------------------------------------------------------
+    */
+    const uniqueActions = [
+      ...new Set(permission.actions)
+    ];
+
+    permissionCode[resource] =
+      uniqueActions;
+  }
 
   return {
-    permissionIds,
+    permissionIds: uniquePermissionIds,
     permissionCode
   };
 };
 
 
-/**
- * Get all roles.
- */
-export const listRoles = async () => {
+/*
+|--------------------------------------------------------------------------
+| Get all roles
+|--------------------------------------------------------------------------
+*/
+export const getAllRoles = async () => {
   return await getRoles();
 };
 
 
-/**
- * Get one role.
- */
-export const getRole = async (
-  roleId
-) => {
-  if (!roleId) {
-    throw new AppError(
-      "Role ID is required",
-      400
-    );
-  }
-
-  const role =
-    await getRoleById(roleId);
+/*
+|--------------------------------------------------------------------------
+| Get role by ID
+|--------------------------------------------------------------------------
+*/
+export const getRole = async (roleId) => {
+  const role = await getRoleById(roleId);
 
   if (!role) {
     throw new AppError(
@@ -192,256 +220,170 @@ export const getRole = async (
 };
 
 
-/**
- * Create a role.
- */
+/*
+|--------------------------------------------------------------------------
+| Create role
+|--------------------------------------------------------------------------
+*/
 export const createRole = async ({
   roleName,
-  description = null,
-  permissionIds = []
+  description,
+  permissions
 }) => {
-  if (
-    !roleName ||
-    typeof roleName !== "string" ||
-    !roleName.trim()
-  ) {
+  const existingRole =
+    await findRoleByName(roleName);
+
+  if (existingRole) {
     throw new AppError(
-      "Role name is required",
-      400
+      "Role with this name already exists",
+      409
     );
   }
-
-  const normalizedRoleName =
-    roleName.trim();
 
   const client =
     await getTransactionClient();
 
   try {
-    await client.query("BEGIN");
-
-    const existingRole =
-      await findRoleByName(
-        client,
-        normalizedRoleName
-      );
-
-    if (existingRole) {
-      throw new AppError(
-        "Role name already exists",
-        409
-      );
-    }
-
+    /*
+    |--------------------------------------------------------------------------
+    | Validate permissions and build permission_code
+    |--------------------------------------------------------------------------
+    */
     const {
-      permissionIds: validPermissionIds,
+      permissionIds,
       permissionCode
     } = await preparePermissions(
       client,
-      permissionIds
+      permissions
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Create role
+    |--------------------------------------------------------------------------
+    */
     const role =
       await createRoleRepository(
         client,
         {
-          roleName: normalizedRoleName,
-          description:
-            typeof description === "string"
-              ? description.trim() || null
-              : null,
+          roleName,
+          description,
           permissionCode
         }
       );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Add resource-level permissions
+    |--------------------------------------------------------------------------
+    */
     await addRolePermissions(
       client,
       role.id,
-      validPermissionIds
+      permissionIds
     );
 
     await client.query("COMMIT");
+    client.release();
 
-    return await getRoleById(
-      role.id
-    );
+    return role;
+
   } catch (error) {
-    await client.query("ROLLBACK");
-
-    if (
-      error.code === "23505"
-    ) {
-      throw new AppError(
-        "Role name already exists",
-        409
-      );
+    try {
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
     }
 
     throw error;
-  } finally {
-    client.release();
   }
 };
 
 
-/**
- * Update a role.
- */
-export const updateRole = async ({
+/*
+|--------------------------------------------------------------------------
+| Update role
+|--------------------------------------------------------------------------
+*/
+export const updateRole = async (
   roleId,
-  roleName,
-  description,
-  permissionIds
-}) => {
-  if (!roleId) {
+  {
+    roleName,
+    description,
+    permissions
+  }
+) => {
+  const existingRole =
+    await getRoleById(roleId);
+
+  if (!existingRole) {
     throw new AppError(
-      "Role ID is required",
-      400
+      "Role not found",
+      404
     );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Check duplicate role name
+  |--------------------------------------------------------------------------
+  */
+  if (roleName) {
+    const duplicateRole =
+      await findRoleByName(
+        roleName,
+        roleId
+      );
+
+    if (duplicateRole) {
+      throw new AppError(
+        "Role with this name already exists",
+        409
+      );
+    }
   }
 
   const client =
     await getTransactionClient();
 
   try {
-    await client.query("BEGIN");
-
-    const existingRole =
-      await getRoleById(roleId);
-
-    if (!existingRole) {
-      throw new AppError(
-        "Role not found",
-        404
-      );
-    }
-
-    if (
-      roleName !== undefined &&
-      (
-        typeof roleName !== "string" ||
-        !roleName.trim()
-      )
-    ) {
-      throw new AppError(
-        "Invalid role name",
-        400
-      );
-    }
-
+    let permissionIds;
     let permissionCode;
-    let validPermissionIds;
 
-    if (
-      permissionIds !== undefined
-    ) {
+    /*
+    |--------------------------------------------------------------------------
+    | Only update permissions when supplied
+    |--------------------------------------------------------------------------
+    */
+    if (permissions !== undefined) {
       const prepared =
         await preparePermissions(
           client,
-          permissionIds
+          permissions
         );
+
+      permissionIds =
+        prepared.permissionIds;
 
       permissionCode =
         prepared.permissionCode;
-
-      validPermissionIds =
-        prepared.permissionIds;
     }
 
-    const updatedRole =
+    /*
+    |--------------------------------------------------------------------------
+    | Update role
+    |--------------------------------------------------------------------------
+    */
+    const role =
       await updateRoleRepository(
         client,
         roleId,
         {
-          roleName:
-            roleName !== undefined
-              ? roleName.trim()
-              : undefined,
-
-          description:
-            description !== undefined
-              ? (
-                  typeof description === "string"
-                    ? description.trim() || null
-                    : null
-                )
-              : undefined,
-
+          roleName,
+          description,
           permissionCode
         }
       );
-
-    if (!updatedRole) {
-      throw new AppError(
-        "Role not found",
-        404
-      );
-    }
-
-    /*
-     * Only replace permission assignments
-     * when permissionIds was actually supplied.
-     */
-    if (
-      permissionIds !== undefined
-    ) {
-      await deleteRolePermissions(
-        client,
-        roleId
-      );
-
-      await addRolePermissions(
-        client,
-        roleId,
-        validPermissionIds
-      );
-    }
-
-    await client.query("COMMIT");
-
-    return await getRoleById(
-      roleId
-    );
-  } catch (error) {
-    await client.query("ROLLBACK");
-
-    if (
-      error.code === "23505"
-    ) {
-      throw new AppError(
-        "Role name already exists",
-        409
-      );
-    }
-
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
-
-/**
- * Delete a role.
- */
-export const deleteRole = async (
-  roleId
-) => {
-  if (!roleId) {
-    throw new AppError(
-      "Role ID is required",
-      400
-    );
-  }
-
-  const client =
-    await getTransactionClient();
-
-  try {
-    await client.query("BEGIN");
-
-    const role =
-      await getRoleById(roleId);
 
     if (!role) {
       throw new AppError(
@@ -451,53 +393,97 @@ export const deleteRole = async (
     }
 
     /*
-     * Remove role-permission mappings first.
-     */
+    |--------------------------------------------------------------------------
+    | Replace resource-level permissions
+    |--------------------------------------------------------------------------
+    */
+    if (permissions !== undefined) {
+      await deleteRolePermissions(
+        client,
+        roleId
+      );
+
+      await addRolePermissions(
+        client,
+        roleId,
+        permissionIds
+      );
+    }
+
+    await client.query("COMMIT");
+    client.release();
+
+    return role;
+
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+
+    throw error;
+  }
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Delete role
+|--------------------------------------------------------------------------
+*/
+export const deleteRole = async (roleId) => {
+  const existingRole =
+    await getRoleById(roleId);
+
+  if (!existingRole) {
+    throw new AppError(
+      "Role not found",
+      404
+    );
+  }
+
+  const client =
+    await getTransactionClient();
+
+  try {
+    /*
+    |--------------------------------------------------------------------------
+    | Delete role permissions first
+    |--------------------------------------------------------------------------
+    */
     await deleteRolePermissions(
       client,
       roleId
     );
 
-    const query = `
-      DELETE FROM roles
-      WHERE id = $1
-      RETURNING id
-    `;
-
-    const result =
-      await client.query(
-        query,
-        [roleId]
-      );
-
-    if (
-      result.rows.length === 0
-    ) {
-      throw new AppError(
-        "Role not found",
-        404
-      );
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Delete role
+    |--------------------------------------------------------------------------
+    */
+    await client.query(
+      `
+        DELETE FROM roles
+        WHERE id = $1
+      `,
+      [roleId]
+    );
 
     await client.query("COMMIT");
+    client.release();
 
     return {
-      id: roleId
+      message: "Role deleted successfully"
     };
-  } catch (error) {
-    await client.query("ROLLBACK");
 
-    if (
-      error.code === "23503"
-    ) {
-      throw new AppError(
-        "Role cannot be deleted because it is assigned to employees",
-        409
-      );
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
     }
 
     throw error;
-  } finally {
-    client.release();
   }
 };

@@ -24,6 +24,7 @@ export const findEmployeeByEmail = async (email) => {
 
 
 // Find employee by ID
+// Find employee by ID
 export const findEmployeeById = async (employeeId) => {
   const query = `
     SELECT
@@ -32,7 +33,8 @@ export const findEmployeeById = async (employeeId) => {
       e.email,
       e.emp_id,
       e.status,
-      e.profile_img_url
+      e.profile_img_url,
+      e.token_version
     FROM employees e
     WHERE e.id = $1
     LIMIT 1
@@ -42,7 +44,6 @@ export const findEmployeeById = async (employeeId) => {
 
   return result.rows[0] || null;
 };
-
 
 // Get employee role and permissions
 export const getEmployeeAuthorization = async (employeeId) => {
