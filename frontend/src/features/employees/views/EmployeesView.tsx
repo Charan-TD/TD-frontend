@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { can, type PermissionMap } from "../../admin/models/access";
 
 import {
   useEmployeesViewModel,
@@ -21,10 +22,12 @@ import {
 
 export function EmployeesView({
   onManageRoles,
+  permissions,
   autoOpenCreate = false,
   onAutoOpenHandled,
 }: {
   onManageRoles?: () => void;
+  permissions: PermissionMap;
   /** Opens the "Add employee" panel automatically (e.g. from the topbar quick action). */
   autoOpenCreate?: boolean;
   onAutoOpenHandled?: () => void;
@@ -32,6 +35,9 @@ export function EmployeesView({
   onOpenDetails?: (employeeId: string) => void;
 }) {
   const vm = useEmployeesViewModel();
+  const canAddEmployee = can(permissions, "employees", "insert");
+  const canCreateRole = can(permissions, "roles", "insert");
+  const canCreatePermission = can(permissions, "permissions", "insert");
 
   const [
     showCreate,
@@ -130,13 +136,13 @@ export function EmployeesView({
   // Opens the panel when the admin uses the "Add employee" quick
   // action from the topbar, then clears the one-shot flag.
   useEffect(() => {
-    if (!autoOpenCreate) return;
+    if (!autoOpenCreate || !canAddEmployee) return;
 
     resetForm();
     setEmployeeId(vm.suggestedEmployeeId);
     setShowCreate(true);
     onAutoOpenHandled?.();
-  }, [autoOpenCreate]);
+  }, [autoOpenCreate, canAddEmployee]);
 
   const selectedRole = vm.roles.find(
     (item) => item.name === role
@@ -179,12 +185,13 @@ export function EmployeesView({
               className="secondary-button"
               type="button"
               onClick={onManageRoles}
+              disabled={!canCreateRole && !can(permissions, "roles", "read")}
             >
               Roles &amp; access
             </button>
           )}
 
-          <button
+          {canAddEmployee && <button
             className="primary-button"
             type="button"
             onClick={() => {
@@ -194,7 +201,7 @@ export function EmployeesView({
             }}
           >
             Add employee
-          </button>
+          </button>}
         </div>
       </header>
 
@@ -648,7 +655,7 @@ export function EmployeesView({
                 permissions={vm.permissions}
                 onChange={setPermissionIds}
                 disabled={isCreating}
-                onCreatePermission={vm.createPermission}
+                onCreatePermission={canCreatePermission ? vm.createPermission : undefined}
                 isCreatingPermission={vm.isCreatingPermission}
               />
             </div>

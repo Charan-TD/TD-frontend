@@ -46,10 +46,8 @@ export function useEmployeesViewModel() {
     isError,
     refetch,
   } = useGetEmployeesQuery({
+    page,
     limit: PAGE_SIZE,
-    offset:
-      (page - 1) *
-      PAGE_SIZE,
   });
 
   const employees =
@@ -58,14 +56,7 @@ export function useEmployeesViewModel() {
   const totalEmployees =
     employeesData?.total ?? 0;
 
-  const totalPages =
-    Math.max(
-      1,
-      Math.ceil(
-        totalEmployees /
-        PAGE_SIZE
-      )
-    );
+  const totalPages = Math.max(1, employeesData?.pagination.totalPages ?? 1);
 
   const {
     data: roles = [],
@@ -202,13 +193,10 @@ export function useEmployeesViewModel() {
       }
 
       try {
-        let roleName =
-          input.roleName.trim();
+        let roleName = input.roleName.trim();
+        let roleId = "";
 
-        if (
-          input.roleMode ===
-          "new"
-        ) {
+        if (input.roleMode === "new") {
           if (
             !input.permissionIds?.length
           ) {
@@ -232,8 +220,19 @@ export function useEmployeesViewModel() {
                 input.permissionCode ?? {},
             }).unwrap();
 
-          roleName =
-            createdRole.name;
+          roleName = createdRole.name;
+          roleId = createdRole.id;
+        } else {
+          const existingRole = roles.find(
+            (role) => role.name.toLowerCase() === roleName.toLowerCase()
+          );
+
+          if (!existingRole) {
+            setErrorMessage("Selected role was not found.");
+            return { success: false };
+          }
+
+          roleId = existingRole.id;
         }
 
         await createEmployee({
@@ -243,10 +242,8 @@ export function useEmployeesViewModel() {
             input.name.trim(),
           email:
             input.email.trim(),
-          password:
-            input.password,
-          role:
-            roleName,
+          password: input.password,
+          roleId,
         }).unwrap();
 
         setSavedMessage(

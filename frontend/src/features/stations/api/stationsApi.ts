@@ -7,17 +7,21 @@ export type Station = {
   city: string | null;
 };
 
+type StationList = {
+  stations: Station[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+
 export const stationsApi = baseApi.injectEndpoints({
+  overrideExisting: true,
   endpoints: (builder) => ({
-    getStations: builder.query<Station[], void>({
-      query: () => ({
+    getStations: builder.query<Station[], { page?: number; limit?: number } | void>({
+      query: (arg) => ({
         url: "/stations",
         method: "GET",
-        params: {
-          select: "id,name,code,city",
-          order: "name.asc",
-        },
+        params: { page: arg?.page ?? 1, limit: arg?.limit ?? 100 },
       }),
+      transformResponse: (response: { success: boolean; data: StationList }) => response.data?.stations ?? [],
       providesTags: (result) =>
         result
           ? [

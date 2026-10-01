@@ -1,23 +1,67 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { skipToken } from "@reduxjs/toolkit/query";
 
 import type { AdminProfile, Screen } from "../models/portal";
 import { adminPortalService } from "../services/adminPortalService";
-import { useEmployeeMeQuery } from "../api/authApi";
+import {
+  useEmployeeMeQuery,
+  type EmployeeMeData,
+} from "../api/authApi";
+import { baseApi } from "../api/baseApi";
+import { clearAuthSession } from "../authSlice";
+import { store } from "../store";
+import {
+  buildPermissionMap,
+  can,
+  sectionsWithRead,
+  type PermissionAction,
+} from "../models/access";
+import type { PortalSection } from "../models/portal";
 
-const defaultAccess: AdminProfile["access"] = [
-  "dashboard",
-  "users",
-  "riders",
-  "restaurants",
-  "orders",
-  "sales",
-  "marketing",
-  "reports",
-  "employees",
-  "stations",
+const STORAGE_KEYS = [
+  "train_dabba_access_token",
+  "train_dabba_refresh_token",
+  "train_dabba_employee",
+  "train_dabba_role",
+  "train_dabba_permissions",
 ];
+
+/** Screens that need a permission before they may be opened at all. */
+const screenRequirement: Partial<
+  Record<Screen, [PortalSection, PermissionAction]>
+> = {
+  employees: ["employees", "read"],
+  "employee-details": ["employees", "read"],
+  "employee-activity": ["employees", "read"],
+  "assign-role": ["employees", "read"],
+};
+
+/**
+ * Builds the portal profile from an authenticated employee. Name, role and
+ * access ALWAYS come from the server response - never from a default.
+ */
+function buildAdminProfile(
+  session: EmployeeMeData,
+  previous?: AdminProfile,
+): AdminProfile {
+  const permissions = buildPermissionMap(session.permissions);
+  const sameEmployee = previous?.employeeId === session.employee.id;
+
+  return {
+    employeeId: session.employee.id,
+    name: session.employee.name,
+    email: session.employee.email,
+    // Local-only edits survive a background /me refresh for the same employee.
+    phone: sameEmployee ? previous!.phone : "",
+    location: sameEmployee ? previous!.location : "",
+    role: session.role?.name ?? "Employee",
+    lastLogin: "Today",
+    access: sectionsWithRead(permissions),
+    permissions,
+  };
+}
 
 export function useAdminPortalViewModel() {
   const [screen, setScreen] = useState<Screen>("login");
@@ -37,48 +81,64 @@ export function useAdminPortalViewModel() {
   );
   const [selectedSubsection, setSelectedSubsection] = useState("users-all");
 
-  const hasAccessToken =
-    typeof window !== "undefined" &&
-    Boolean(localStorage.getItem("train_dabba_access_token"));
+  // The access token lives in state (not read from localStorage during
+  // render) so login/logout re-render deterministically and SSR/hydration
+  // never disagree.
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  useEffect(() => {
+    setAccessToken(localStorage.getItem("train_dabba_access_token"));
+  }, []);
+
+  // `currentData` (not `data`) is used on purpose: it is undefined until the
+  // response for THIS token arrives, so a previous employee's cached profile
+  // can never be re-applied to the person who just logged in.
   const {
-    data: employeeSession,
+    currentData: employeeSession,
     isSuccess: isSessionValid,
     isError: isSessionError,
-  } = useEmployeeMeQuery(undefined, {
-    skip: !hasAccessToken,
-  });
+    error: sessionError,
+  } = useEmployeeMeQuery(accessToken ?? skipToken);
 
-  useEffect(() => {
-    if (!employeeSession?.data) return;
+  const logout = () => {
+    STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    store.dispatch(clearAuthSession());
+    store.dispatch(baseApi.util.resetApiState());
 
-    const employee = employeeSession.data.employee;
-
-    const authenticatedAdmin: AdminProfile = {
-      name: employee.name,
-      email: employee.email,
-      phone: "",
-      location: "",
-      role: employeeSession.data.role?.name ?? "Employee",
-      lastLogin: "Today",
-      access: defaultAccess,
-    };
-
-    setAdmin(authenticatedAdmin);
-    setScreen("dashboard");
-  }, [employeeSession]);
-
-  useEffect(() => {
-    if (!hasAccessToken || !isSessionError) return;
-
-    localStorage.removeItem("train_dabba_access_token");
-    localStorage.removeItem("train_dabba_refresh_token");
-    localStorage.removeItem("train_dabba_employee");
-    localStorage.removeItem("train_dabba_role");
-    localStorage.removeItem("train_dabba_permissions");
-
+    setAccessToken(null);
+    setAdmin(adminPortalService.getAdmin());
+    setSelectedEmployeeId(null);
+    setPendingAction(null);
+    setNoticeOpen(false);
+    setSavedMessage("");
     setScreen("login");
-  }, [hasAccessToken, isSessionError]);
+  };
+
+  /** Called by the login form with the server's login response. */
+  const startSession = (session: EmployeeMeData & { accessToken: string }) => {
+    setAdmin(buildAdminProfile(session));
+    setAccessToken(session.accessToken);
+    setScreen("dashboard");
+    window.scrollTo({ top: 0 });
+  };
+
+  // Page refresh / returning user: restore the profile from /me.
+  useEffect(() => {
+    if (!accessToken || !employeeSession?.data) return;
+
+    // Always take the freshest permissions the server reports.
+    setAdmin((current) => buildAdminProfile(employeeSession.data, current));
+    setScreen((current) => (current === "login" ? "dashboard" : current));
+  }, [employeeSession, accessToken]);
+
+  // Only an authentication failure ends the session; a network blip does not.
+  useEffect(() => {
+    if (!accessToken || !isSessionError) return;
+
+    const status = (sessionError as { status?: unknown } | undefined)?.status;
+    if (status === 401 || status === 403) logout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, isSessionError, sessionError]);
 
   const data = useMemo(
     () => ({
@@ -105,6 +165,19 @@ export function useAdminPortalViewModel() {
   });
 
   const navigate = (next: Screen) => {
+    // "login" is the sign-out destination: it must wipe the session, not just
+    // swap the screen (the old behaviour left the previous user's token,
+    // cached profile and full access in place for the next person).
+    if (next === "login") {
+      logout();
+      return;
+    }
+
+    const requirement = screenRequirement[next];
+    if (requirement && !can(admin.permissions, requirement[0], requirement[1])) {
+      return;
+    }
+
     setScreen(next);
     setNoticeOpen(false);
     setSavedMessage("");
@@ -120,6 +193,13 @@ export function useAdminPortalViewModel() {
   >(null);
 
   const triggerQuickAction = (action: "add-employee") => {
+    if (
+      !can(admin.permissions, "employees", "read") ||
+      !can(admin.permissions, "employees", "insert")
+    ) {
+      return;
+    }
+
     setPendingAction(action);
     navigate("employees");
   };
@@ -177,6 +257,7 @@ export function useAdminPortalViewModel() {
     pendingAction,
 
     navigate,
+    startSession,
     saveProfile,
     selectManagementService,
     selectEmployee,

@@ -11,9 +11,9 @@ type Props = { metrics: Metric[]; activities: Activity[]; access: PortalSection[
 
 export function DashboardView({ metrics, activities, access, onNavigateManagement }: Props) {
   const vm = useDashboardViewModel(metrics, activities, onNavigateManagement);
-  const { data: orders, isLoading: ordersLoading, isError: ordersError } = useGetOrdersQuery();
-  const { data: riders, isLoading: ridersLoading, isError: ridersError } = useGetRidersQuery();
-  const { data: stations, isLoading: stationsLoading, isError: stationsError } = useGetStationsQuery();
+  const { data: orders, isLoading: ordersLoading, isError: ordersError } = useGetOrdersQuery(undefined, { skip: !access.includes("orders") });
+  const { data: riders, isLoading: ridersLoading, isError: ridersError } = useGetRidersQuery(undefined, { skip: !access.includes("riders") });
+  const { data: stations, isLoading: stationsLoading, isError: stationsError } = useGetStationsQuery(undefined, { skip: !access.includes("stations") });
   const { trendData, trendMode, setTrendMode, selectedPoint, setSelectedPoint, selected, pointString, areaPath } = vm;
   const visibleMetrics = access.includes("users") && access.includes("riders") && access.includes("restaurants") && access.includes("orders")
     ? metrics
@@ -33,7 +33,10 @@ export function DashboardView({ metrics, activities, access, onNavigateManagemen
     { label: "Riders", value: ridersLoading ? "…" : ridersError ? "—" : String(riders?.length ?? 0), trend: ridersError ? "API unavailable" : "Live from riders", icon: "users", tone: "mint" },
     { label: "Stations", value: stationsLoading ? "…" : stationsError ? "—" : String(stations?.length ?? 0), trend: stationsError ? "API unavailable" : "Live from stations", icon: "station", tone: "orange" },
   ];
-  const dashboardMetrics = [visibleMetrics.find((metric) => metric.label === "Users") ?? visibleMetrics[0], ...liveMetrics];
+  // A live card is shown only for a section this employee can read. Without this,
+  // a skipped query rendered a misleading "0" card for sections they cannot access.
+  const permittedLiveMetrics = liveMetrics.filter((metric) => access.includes(metric.label.toLowerCase() as PortalSection));
+  const dashboardMetrics = [visibleMetrics.find((metric) => metric.label === "Users") ?? visibleMetrics[0], ...permittedLiveMetrics].filter(Boolean) as Metric[];
 
   return (
     <>

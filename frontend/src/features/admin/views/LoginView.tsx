@@ -2,9 +2,10 @@
 
 import { Brand } from "../components/Brand";
 import { Icon } from "../components/Icon";
+import type { EmployeeLoginData } from "../api/authApi";
 import { useLoginViewModel } from "../viewmodels/loginViewModel";
 
-export function LoginView({ onSignIn }: { onSignIn: () => void }) {
+export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData) => void }) {
   const vm = useLoginViewModel(onSignIn);
 
   return (

@@ -8,6 +8,7 @@ import {
 import {
   useCreatePermissionMutation,
   useCreateRoleMutation,
+  useUpdateRoleMutation,
   useGetPermissionsQuery,
   useGetRolesQuery,
 } from "../api/rolesApi";
@@ -69,8 +70,8 @@ export function useAssignRoleViewModel(
     isFetching: isEmployeesFetching,
     error: employeesError,
   } = useGetEmployeesQuery({
+    page: 1,
     limit: 100,
-    offset: 0,
   });
 
   const employees =
@@ -95,6 +96,9 @@ export function useAssignRoleViewModel(
 
   const [createRoleMutation, { isLoading: isCreatingRole }] =
     useCreateRoleMutation();
+
+  const [updateRoleMutation, { isLoading: isUpdatingRole }] =
+    useUpdateRoleMutation();
 
   const [createPermissionMutation, { isLoading: isCreatingPermission }] =
     useCreatePermissionMutation();
@@ -136,9 +140,16 @@ export function useAssignRoleViewModel(
     }
 
     try {
+      const role = roles.find((item) => item.name === roleName);
+      if (!role) {
+        setErrorMessage("Selected role was not found.");
+        return false;
+      }
+
       await assignEmployeeAccess({
         employeeId,
-        roleName,
+        roleId: role.id,
+        status: "active",
       }).unwrap();
 
       setSavedMessage("Role assigned successfully.");
@@ -202,6 +213,32 @@ export function useAssignRoleViewModel(
     }
   };
 
+
+  const updateRole = async (
+    id: string,
+    name: string,
+    description: string,
+    permissionIds: string[],
+  ) => {
+    setSavedMessage("");
+    setErrorMessage("");
+
+    try {
+      const role = await updateRoleMutation({
+        id,
+        name: name.trim(),
+        description: description.trim(),
+        permissionIds,
+      }).unwrap();
+      setRoleName(role.name);
+      setSavedMessage("Role permissions updated successfully.");
+      return role;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      return null;
+    }
+  };
+
   /**
    * Creates a permission dynamically.
    *
@@ -250,6 +287,7 @@ export function useAssignRoleViewModel(
 
     isSaving,
     isCreatingRole,
+    isUpdatingRole,
     isCreatingPermission,
 
     isLoading:
@@ -274,6 +312,7 @@ export function useAssignRoleViewModel(
     selectRole,
     save,
     createRole,
+    updateRole,
     createPermission,
   };
 }

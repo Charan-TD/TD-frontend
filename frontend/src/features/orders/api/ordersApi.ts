@@ -7,17 +7,25 @@ export type Order = {
   status: string | null;
 };
 
+type OrderList = {
+  orders: Order[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+
 export const ordersApi = baseApi.injectEndpoints({
+  overrideExisting: true,
   endpoints: (builder) => ({
-    getOrders: builder.query<Order[], void>({
-      query: () => ({
+    getOrders: builder.query<Order[], { page?: number; limit?: number; status?: string } | void>({
+      query: (arg) => ({
         url: "/orders",
         method: "GET",
         params: {
-          select: "id,customer_user_id,restaurant_station_service_id,status",
-          order: "created_at.desc",
+          page: arg?.page ?? 1,
+          limit: arg?.limit ?? 100,
+          ...(arg?.status ? { status: arg.status } : {}),
         },
       }),
+      transformResponse: (response: { success: boolean; data: OrderList }) => response.data?.orders ?? [],
       providesTags: (result) =>
         result
           ? [

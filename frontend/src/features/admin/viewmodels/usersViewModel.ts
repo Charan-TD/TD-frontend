@@ -29,12 +29,10 @@ export function useUsersViewModel(
   const status =
     workspace === "blocked" ? "blocked" : "all";
 
-  const offset = (page - 1) * PAGE_SIZE;
-
   const query = useGetUsersQuery({
     search,
+    page,
     limit: PAGE_SIZE,
-    offset,
     status,
   });
 
@@ -42,8 +40,16 @@ export function useUsersViewModel(
     useUpdateUserStatusMutation();
 
   const users = useMemo(() => {
-    return query.data?.users ?? [];
-  }, [query.data]);
+    const allUsers = query.data?.users ?? [];
+    const needle = search.trim().toLowerCase();
+    if (!needle) return allUsers;
+
+    return allUsers.filter((user) =>
+      [user.full_name, user.email, user.phone]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(needle))
+    );
+  }, [query.data, search]);
 
   const hasNextPage = query.data?.hasMore ?? false;
   const hasPreviousPage = page > 1;

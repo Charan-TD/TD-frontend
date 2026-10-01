@@ -49,7 +49,11 @@ export const authApi = baseApi.injectEndpoints({
             }),
         }),
 
-        employeeMe: builder.query<EmployeeMeResponse, void>({
+        // The argument is the access token. It is never sent in the URL - the
+        // Authorization header does that - it only makes the cache entry
+        // per-session, so one employee's cached profile can never be served
+        // to the next employee who logs in on the same browser.
+        employeeMe: builder.query<EmployeeMeResponse, string>({
             query: () => ({
                 url: "/auth/employee/me",
                 method: "GET",

@@ -5445,3 +5445,32 @@ img.avatar {
     align-items: stretch;
   }
 }
+
+/* ============================================================
+ * Quick-action buttons the signed-in employee is not permitted to use.
+ * Cursor becomes the "not allowed" (prohibited) symbol.
+ * ========================================================== */
+.topbar-action-link.is-disabled,
+.topbar-action-link.is-disabled:hover {
+  cursor: not-allowed;
+  color: #9aa1b3;
+  border-color: var(--line);
+  background: #f3f4f8;
+  box-shadow: none;
+  transform: none;
+}
+
+.topbar-action-link.is-disabled svg {
+  color: #b6bccb;
+}
+
+.topbar-action-link--primary.is-disabled,
+.topbar-action-link--primary.is-disabled:hover {
+  color: #fff;
+  border-color: #f0cfae;
+  background: #f3cba3;
+}
+
+.topbar-action-link--primary.is-disabled svg {
+  color: #fff;
+}

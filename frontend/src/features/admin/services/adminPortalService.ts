@@ -1,13 +1,21 @@
 import type { Activity, AdminProfile, MenuItem, Metric, Module, UserActivity } from "../models/portal";
 
-const admin: AdminProfile = {
-  name: "Uday Sir",
-  email: "udaySir@traindabba.in",
-  phone: "+91 98765 43210",
-  location: "Bengaluru, Karnataka",
-  role: "Super Admin",
-  lastLogin: "Today, 09:42 AM",
-  access: ["dashboard", "users", "riders", "restaurants", "orders", "sales", "marketing", "reports", "employees", "stations"],
+/**
+ * Signed-out placeholder. It deliberately carries NO name and NO access:
+ * the real profile always comes from the authenticated employee (login
+ * response or /auth/employee/me). Previously this was a hard-coded
+ * "Uday Sir" super-admin with every section, which is what every other
+ * employee briefly (or, after a logout, persistently) inherited.
+ */
+const guestAdmin: AdminProfile = {
+  name: "",
+  email: "",
+  phone: "",
+  location: "",
+  role: "",
+  lastLogin: "",
+  access: [],
+  permissions: {},
 };
 
 const metrics: Metric[] = [
@@ -52,7 +60,7 @@ const activities: Activity[] = [
 ];
 
 export const adminPortalService = {
-  getAdmin: () => ({ ...admin }),
+  getAdmin: () => ({ ...guestAdmin, access: [], permissions: {} }),
   getMetrics: () => metrics,
   getModules: () => modules,
   getMenu: () => menu,

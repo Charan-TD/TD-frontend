@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AdminProfile, Module, PortalSection, Screen } from "../models/portal";
 import type { NavigationSectionId } from "../models/navigation";
 import { navigationGroups, navigationSections, navigationSubsections } from "../models/navigation";
+import { missingPermissions } from "../models/access";
 import { useSidebarViewModel } from "../viewmodels/sidebarViewModel";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
@@ -20,6 +21,35 @@ type Props = {
   onToggleManagement: () => void; onToggleNotice: () => void; onQuickAddEmployee: () => void; children: ReactNode;
 };
 
+/**
+ * A topbar quick-action button. It is ALWAYS rendered so every employee sees
+ * the same shortcuts; what changes is whether it is usable:
+ *  - allowed  -> normal button, runs the action
+ *  - blocked  -> greyed out, the cursor becomes the "not allowed" symbol, the
+ *                tooltip names the missing permission, and a click does nothing.
+ * aria-disabled (rather than the disabled attribute) is used so the tooltip
+ * and cursor still work on a blocked button.
+ */
+function QuickAction({ label, icon, missing, enabledTitle, attention = false, primary = false, onRun }: {
+  label: string; icon: Parameters<typeof Icon>[0]["name"]; missing: string[]; enabledTitle: string;
+  attention?: boolean; primary?: boolean; onRun: () => void;
+}) {
+  const blocked = missing.length > 0;
+
+  return (
+    <button
+      type="button"
+      className={`topbar-action-link${primary ? " topbar-action-link--primary" : ""}${blocked ? " is-disabled" : ""}`}
+      aria-disabled={blocked}
+      title={blocked ? `${label} is not available - you need the ${missing.join(" + ")} permission` : enabledTitle}
+      onClick={() => { if (!blocked) onRun(); }}
+    >
+      {!blocked && attention && <span className="topbar-action-blink" aria-hidden="true" />}
+      <Icon name={icon} size={14} /><span>{label}</span>
+    </button>
+  );
+}
+
 const screenToSection: Partial<Record<Screen, NavigationSectionId>> = { dashboard: "dashboard", management: "users", employees: "employees", "employee-details": "employees", "assign-role": "employees", "employee-activity": "employees" };
 
 export function AppShell({ title, subtitle, screen, admin, noticeOpen, managementServices, selectedManagementId, managementOpen, selectedSubsection, onNavigate, onSelectManagement, onToggleManagement, onToggleNotice, onQuickAddEmployee, children }: Props) {
@@ -27,19 +57,23 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, managemen
   const allowed = new Set<PortalSection>(admin.access);
   const sections = navigationSections.filter((item) => allowed.has(item.section));
 
+  // What each quick action needs. Opening the target page needs `read`; the
+  // action itself needs the matching write permission.
+  const missingAddEmployee = missingPermissions(admin.permissions, [["employees", "read"], ["employees", "insert"]]);
+  const missingApproveRestaurants = missingPermissions(admin.permissions, [["restaurants", "read"], ["restaurants", "update"]]);
+  const missingApproveRiders = missingPermissions(admin.permissions, [["riders", "read"], ["riders", "update"]]);
+  const missingCreateOffer = missingPermissions(admin.permissions, [["marketing", "read"], ["marketing", "insert"]]);
+  const missingAddRestaurant = missingPermissions(admin.permissions, [["restaurants", "read"], ["restaurants", "insert"]]);
+  const missingAddRider = missingPermissions(admin.permissions, [["riders", "read"], ["riders", "insert"]]);
+
   /* ---------------------------------------------------------- quick action attention
    * Blink indicators on the topbar quick-action buttons so the admin can
    * tell at a glance whether that section needs attention: restaurants or
    * riders awaiting approval, or employees with no role assigned yet.
    */
-  const { data: restaurantsForAttention = [] } = useGetRestaurantsQuery();
-  const { data: ridersForAttention = [] } = useGetRidersQuery();
-  const {
-    data: employeesForAttentionData,
-  } = useGetEmployeesQuery({
-    limit: 100,
-    offset: 0,
-  });
+  const { data: restaurantsForAttention = [] } = useGetRestaurantsQuery(undefined, { skip: !allowed.has("restaurants") });
+  const { data: ridersForAttention = [] } = useGetRidersQuery(undefined, { skip: !allowed.has("riders") });
+  const { data: employeesForAttentionData } = useGetEmployeesQuery({ page: 1, limit: 100 }, { skip: !allowed.has("employees") });
 
   const employeesForAttention =
     employeesForAttentionData?.employees ?? [];
@@ -113,10 +147,11 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, managemen
       });
     });
 
-    results.push({ id: "action-add-employee", label: "Add Employee", group: "Quick action", icon: "users", run: onQuickAddEmployee });
-    results.push({ id: "action-add-restaurant", label: "Add Restaurant", group: "Quick action", icon: "store", run: () => navigateManagementShortcut("restaurants", "restaurants-all") });
-    results.push({ id: "action-add-rider", label: "Add Rider", group: "Quick action", icon: "rider", run: () => navigateManagementShortcut("riders", "riders-all") });
-    results.push({ id: "action-create-offer", label: "Create Offer", group: "Quick action", icon: "megaphone", run: () => navigateManagementShortcut("marketing", "marketing-offers") });
+    // Quick actions only appear in search when the employee may actually run them.
+    if (missingAddEmployee.length === 0) results.push({ id: "action-add-employee", label: "Add Employee", group: "Quick action", icon: "users", run: onQuickAddEmployee });
+    if (missingAddRestaurant.length === 0) results.push({ id: "action-add-restaurant", label: "Add Restaurant", group: "Quick action", icon: "store", run: () => navigateManagementShortcut("restaurants", "restaurants-all") });
+    if (missingAddRider.length === 0) results.push({ id: "action-add-rider", label: "Add Rider", group: "Quick action", icon: "rider", run: () => navigateManagementShortcut("riders", "riders-all") });
+    if (missingCreateOffer.length === 0) results.push({ id: "action-create-offer", label: "Create Offer", group: "Quick action", icon: "megaphone", run: () => navigateManagementShortcut("marketing", "marketing-offers") });
 
     return results;
   }, [sections, onQuickAddEmployee, onSelectManagement, navigateManagementShortcut]);
@@ -208,21 +243,13 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, managemen
 
         <div className="topbar-actions">
           <div className="topbar-action-links" aria-label="Quick actions">
-            <button type="button" className="topbar-action-link" onClick={onQuickAddEmployee} title={unassignedEmployeesCount > 0 ? `Add employee (${unassignedEmployeesCount} without a role)` : "Add employee"}>
-              {unassignedEmployeesCount > 0 && <span className="topbar-action-blink" aria-hidden="true" />}
-              <Icon name="users" size={14} /><span>Add Employee</span>
-            </button>
-            <button type="button" className="topbar-action-link" onClick={() => navigateManagementShortcut("restaurants", "restaurants-approvals")} title={pendingRestaurantsCount > 0 ? `Approve restaurants (${pendingRestaurantsCount} pending)` : "Approve restaurants"}>
-              {pendingRestaurantsCount > 0 && <span className="topbar-action-blink" aria-hidden="true" />}
-              <Icon name="store" size={14} /><span>Approve Restaurants</span>
-            </button>
-            <button type="button" className="topbar-action-link" onClick={() => navigateManagementShortcut("riders", "riders-approvals")} title={pendingRidersCount > 0 ? `Approve riders (${pendingRidersCount} pending)` : "Approve riders"}>
-              {pendingRidersCount > 0 && <span className="topbar-action-blink" aria-hidden="true" />}
-              <Icon name="rider" size={14} /><span>Approve Riders</span>
-            </button>
-            <button type="button" className="topbar-action-link topbar-action-link--primary" onClick={() => navigateManagementShortcut("marketing", "marketing-offers")} title="Create offer">
-              <Icon name="megaphone" size={14} /><span>Create Offer</span>
-            </button>
+            <QuickAction label="Add Employee" icon="users" missing={missingAddEmployee} attention={unassignedEmployeesCount > 0} onRun={onQuickAddEmployee}
+              enabledTitle={unassignedEmployeesCount > 0 ? `Add employee (${unassignedEmployeesCount} without a role)` : "Add employee"} />
+            <QuickAction label="Approve Restaurants" icon="store" missing={missingApproveRestaurants} attention={pendingRestaurantsCount > 0} onRun={() => navigateManagementShortcut("restaurants", "restaurants-approvals")}
+              enabledTitle={pendingRestaurantsCount > 0 ? `Approve restaurants (${pendingRestaurantsCount} pending)` : "Approve restaurants"} />
+            <QuickAction label="Approve Riders" icon="rider" missing={missingApproveRiders} attention={pendingRidersCount > 0} onRun={() => navigateManagementShortcut("riders", "riders-approvals")}
+              enabledTitle={pendingRidersCount > 0 ? `Approve riders (${pendingRidersCount} pending)` : "Approve riders"} />
+            <QuickAction label="Create Offer" icon="megaphone" primary missing={missingCreateOffer} onRun={() => navigateManagementShortcut("marketing", "marketing-offers")} enabledTitle="Create offer" />
           </div>
 
           <div className="notification-wrap"><button className="icon-button" type="button" aria-label="Notifications" onClick={onToggleNotice}><Icon name="bell" /><span className="notification-dot" /></button>{noticeOpen && <div className="notification-popover"><strong>3 items need attention</strong><span>Approvals and complaints are waiting for review.</span></div>}</div>

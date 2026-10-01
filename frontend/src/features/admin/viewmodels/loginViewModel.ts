@@ -3,10 +3,12 @@
 import { useState } from "react";
 
 import { useEmployeeLoginMutation } from "../api/authApi";
+import { baseApi } from "../api/baseApi";
+import type { EmployeeLoginData } from "../api/authApi";
 import { setAuthSession } from "../authSlice";
 import { store } from "../store";
 
-export function useLoginViewModel(onSignIn: () => void) {
+export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [email, setEmail] = useState("udaySir@traindabba.in");
   const [password, setPassword] = useState("");
@@ -24,8 +26,6 @@ export function useLoginViewModel(onSignIn: () => void) {
         email: email.trim(),
         password,
       }).unwrap();
-      console.log("LOGIN RESPONSE:", response);
-      console.log("ACCESS TOKEN:", response.data.accessToken);
 
       store.dispatch(
         setAuthSession({
@@ -62,7 +62,10 @@ export function useLoginViewModel(onSignIn: () => void) {
         JSON.stringify(response.data.permissions),
       );
 
-      onSignIn();
+      // Reset RTK Query cache to clear any leftover `isError` states from previous failed sessions
+      store.dispatch(baseApi.util.resetApiState());
+
+      onSignIn(response.data);
     } catch (error: any) {
       setErrorMessage(
         error?.data?.message ||

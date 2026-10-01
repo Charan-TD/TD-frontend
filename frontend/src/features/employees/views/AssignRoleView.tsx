@@ -1,23 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAssignRoleViewModel } from "../viewmodels/assignRoleViewModel";
+import { can, type PermissionMap } from "../../admin/models/access";
 import { PermissionMatrixEditor } from "../components/PermissionMatrixEditor";
 import { SidePanel } from "../../admin/components/SidePanel";
 
 export function AssignRoleView({
   onBack,
+  permissions,
 }: {
   onBack?: () => void;
+  permissions: PermissionMap;
 }) {
   const vm = useAssignRoleViewModel();
+  const canCreateRole = can(permissions, "roles", "insert");
+  const canUpdateRole = can(permissions, "roles", "update");
+  const canCreatePermission = can(permissions, "permissions", "insert");
 
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
-  const [newRolePermissionIds, setNewRolePermissionIds] = useState<string[]>(
-    []
-  );
+  const [newRolePermissionIds, setNewRolePermissionIds] = useState<string[]>([]);
+  const [showEditRole, setShowEditRole] = useState(false);
+  const [editPermissionIds, setEditPermissionIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setEditPermissionIds(vm.selectedRole?.permissionIds ?? []);
+  }, [vm.selectedRole]);
 
   return (
     <section className="employee-workspace">
@@ -33,13 +43,15 @@ export function AssignRoleView({
           </p>
         </div>
 
-        <button
-          type="button"
-          className="primary-button"
-          onClick={() => setShowCreateRole(true)}
-        >
-          Create Role
-        </button>
+        {canCreateRole && (
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setShowCreateRole(true)}
+          >
+            Create Role
+          </button>
+        )}
       </div>
 
       <div className="assign-role-form">
@@ -97,11 +109,18 @@ export function AssignRoleView({
               <h3>{vm.selectedRole.name}</h3>
 
               {vm.selectedRole.description && (
-                <p>
-                  {vm.selectedRole.description}
-                </p>
+                <p>{vm.selectedRole.description}</p>
               )}
             </div>
+            {canUpdateRole && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setShowEditRole(true)}
+              >
+                Configure permissions
+              </button>
+            )}
           </div>
 
           <div className="permission-list">
@@ -169,7 +188,7 @@ export function AssignRoleView({
           permissions={vm.permissions}
           onChange={setNewRolePermissionIds}
           disabled={vm.isCreatingRole}
-          onCreatePermission={vm.createPermission}
+          onCreatePermission={canCreatePermission ? vm.createPermission : undefined}
           isCreatingPermission={vm.isCreatingPermission}
         />
 
@@ -212,6 +231,54 @@ export function AssignRoleView({
               : "Create Role"}
           </button>
         </div>
+      </SidePanel>
+
+      <SidePanel
+        open={showEditRole && Boolean(vm.selectedRole)}
+        onClose={() => setShowEditRole(false)}
+        eyebrow="ROLE MANAGEMENT"
+        title={`Configure ${vm.selectedRole?.name ?? "Role"}`}
+        description="Update the permissions assigned to this role."
+        widthVariant="wide"
+      >
+        {vm.selectedRole && (
+          <>
+            <PermissionMatrixEditor
+              value={editPermissionIds}
+              permissions={vm.permissions}
+              onChange={setEditPermissionIds}
+              disabled={vm.isUpdatingRole}
+              onCreatePermission={canCreatePermission ? vm.createPermission : undefined}
+              isCreatingPermission={vm.isCreatingPermission}
+            />
+            <div className="assign-role-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setShowEditRole(false)}
+                disabled={vm.isUpdatingRole}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={async () => {
+                  const role = await vm.updateRole(
+                    vm.selectedRole!.id,
+                    vm.selectedRole!.name,
+                    vm.selectedRole!.description,
+                    editPermissionIds,
+                  );
+                  if (role) setShowEditRole(false);
+                }}
+                disabled={vm.isUpdatingRole}
+              >
+                {vm.isUpdatingRole ? "Saving..." : "Save permissions"}
+              </button>
+            </div>
+          </>
+        )}
       </SidePanel>
 
       {vm.errorMessage && (
