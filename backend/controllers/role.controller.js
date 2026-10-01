@@ -1,24 +1,22 @@
 import {
-  listRoles,
+  getAllRoles,
   getRole,
-  createRole,
-  updateRole,
-  deleteRole
+  createRole as createRoleService,
+  updateRole as updateRoleService,
+  deleteRole as deleteRoleService
 } from "../services/role.service.js";
 
 
-/**
- * GET /roles
- */
-export const getRoles = async (
-  req,
-  res,
-  next
-) => {
+/*
+|--------------------------------------------------------------------------
+| Get all roles
+|--------------------------------------------------------------------------
+*/
+export const getRoles = async (req, res, next) => {
   try {
-    const roles = await listRoles();
+    const roles = await getAllRoles();
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: roles
     });
@@ -28,20 +26,18 @@ export const getRoles = async (
 };
 
 
-/**
- * GET /roles/:id
- */
-export const getRoleById = async (
-  req,
-  res,
-  next
-) => {
+/*
+|--------------------------------------------------------------------------
+| Get role by ID
+|--------------------------------------------------------------------------
+*/
+export const getRoleById = async (req, res, next) => {
   try {
     const role = await getRole(
-      req.params.id
+      req.params.roleId
     );
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: role
     });
@@ -51,14 +47,12 @@ export const getRoleById = async (
 };
 
 
-/**
- * POST /roles
- */
-export const createRoleController = async (
-  req,
-  res,
-  next
-) => {
+/*
+|--------------------------------------------------------------------------
+| Create role
+|--------------------------------------------------------------------------
+*/
+export const createRole = async (req, res, next) => {
   try {
     const {
       roleName,
@@ -66,13 +60,14 @@ export const createRoleController = async (
       permissions
     } = req.body;
 
-    const role = await createRole({
-      roleName,
-      description,
-      permissions
-    });
+    const role =
+      await createRoleService({
+        roleName,
+        description,
+        permissions
+      });
 
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
       message: "Role created successfully",
       data: role
@@ -83,14 +78,12 @@ export const createRoleController = async (
 };
 
 
-/**
- * PATCH /roles/:id
- */
-export const updateRoleController = async (
-  req,
-  res,
-  next
-) => {
+/*
+|--------------------------------------------------------------------------
+| Update role
+|--------------------------------------------------------------------------
+*/
+export const updateRole = async (req, res, next) => {
   try {
     const {
       roleName,
@@ -98,14 +91,17 @@ export const updateRoleController = async (
       permissions
     } = req.body;
 
-    const role = await updateRole({
-      roleId: req.params.id,
-      roleName,
-      description,
-      permissions
-    });
+    const role =
+      await updateRoleService(
+        req.params.roleId,
+        {
+          roleName,
+          description,
+          permissions
+        }
+      );
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Role updated successfully",
       data: role
@@ -116,23 +112,21 @@ export const updateRoleController = async (
 };
 
 
-/**
- * DELETE /roles/:id
- */
-export const deleteRoleController = async (
-  req,
-  res,
-  next
-) => {
+/*
+|--------------------------------------------------------------------------
+| Delete role
+|--------------------------------------------------------------------------
+*/
+export const deleteRole = async (req, res, next) => {
   try {
-    const result = await deleteRole(
-      req.params.id
-    );
+    const result =
+      await deleteRoleService(
+        req.params.roleId
+      );
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: "Role deleted successfully",
-      data: result
+      ...result
     });
   } catch (error) {
     next(error);

@@ -1,135 +1,84 @@
 import pool from "../config/database.js";
 
-
-/**
- * Get all roles with their assigned permission IDs
- * and permission names.
- */
+/*
+|--------------------------------------------------------------------------
+| Get all roles
+|--------------------------------------------------------------------------
+*/
 export const getRoles = async () => {
-  const query = `
-    SELECT
-      r.id,
-      r.role_name,
-      r.description,
-      r.created_at,
-      r.updated_at,
-      r.permission_code,
-      COALESCE(
-        jsonb_agg(
-          jsonb_build_object(
-            'permission_id', rp.permission_id,
-            'permission_name', p.permission_name
-          )
-          ORDER BY p.permission_name
-        ) FILTER (WHERE rp.permission_id IS NOT NULL),
-        '[]'::jsonb
-      ) AS permissions
-    FROM roles r
-    LEFT JOIN role_permissions rp
-      ON rp.role_id = r.id
-    LEFT JOIN permissions p
-      ON p.id = rp.permission_id
-    GROUP BY
-      r.id,
-      r.role_name,
-      r.description,
-      r.created_at,
-      r.updated_at,
-      r.permission_code
-    ORDER BY r.created_at DESC
-  `;
-
-  const result = await pool.query(query);
-
-  return result.rows;
-};
-
-
-/**
- * Get a single role by ID.
- */
-export const getRoleById = async (roleId) => {
-  const query = `
-    SELECT
-      r.id,
-      r.role_name,
-      r.description,
-      r.created_at,
-      r.updated_at,
-      r.permission_code,
-      COALESCE(
-        jsonb_agg(
-          jsonb_build_object(
-            'permission_id', rp.permission_id,
-            'permission_name', p.permission_name
-          )
-          ORDER BY p.permission_name
-        ) FILTER (WHERE rp.permission_id IS NOT NULL),
-        '[]'::jsonb
-      ) AS permissions
-    FROM roles r
-    LEFT JOIN role_permissions rp
-      ON rp.role_id = r.id
-    LEFT JOIN permissions p
-      ON p.id = rp.permission_id
-    WHERE r.id = $1
-    GROUP BY
-      r.id,
-      r.role_name,
-      r.description,
-      r.created_at,
-      r.updated_at,
-      r.permission_code
-  `;
-
-  const result = await pool.query(
-    query,
-    [roleId]
-  );
-
-  return result.rows[0] || null;
-};
-
-
-/**
- * Find a role by name.
- */
-export const findRoleByName = async (
-  client,
-  roleName
-) => {
   const query = `
     SELECT
       id,
       role_name,
       description,
+      permission_code,
       created_at,
-      updated_at,
-      permission_code
+      updated_at
     FROM roles
-    WHERE LOWER(role_name) = LOWER($1)
-    LIMIT 1
+    ORDER BY created_at DESC
   `;
 
-  const result = await client.query(
-    query,
-    [roleName]
-  );
+  const result = await pool.query(query);
+  return result.rows;
+};
 
+
+/*
+|--------------------------------------------------------------------------
+| Get role by ID
+|--------------------------------------------------------------------------
+*/
+export const getRoleById = async (roleId) => {
+  const query = `
+    SELECT
+      id,
+      role_name,
+      description,
+      permission_code,
+      created_at,
+      updated_at
+    FROM roles
+    WHERE id = $1
+  `;
+
+  const result = await pool.query(query, [roleId]);
   return result.rows[0] || null;
 };
 
 
-/**
- * Create a role.
- */
+/*
+|--------------------------------------------------------------------------
+| Find role by name
+|--------------------------------------------------------------------------
+*/
+export const findRoleByName = async (roleName, excludeRoleId = null) => {
+  const query = `
+    SELECT
+      id,
+      role_name,
+      description,
+      permission_code,
+      created_at,
+      updated_at
+    FROM roles
+    WHERE LOWER(role_name) = LOWER($1)
+      AND ($2::uuid IS NULL OR id <> $2)
+    LIMIT 1
+  `;
+
+  const result = await pool.query(query, [roleName, excludeRoleId]);
+  return result.rows[0] || null;
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Create role
+|--------------------------------------------------------------------------
+*/
 export const createRole = async (
   client,
-  {
-    roleName,
-    description,
-    permissionCode
-  }
+  { roleName, description, permissionCode }
 ) => {
   const query = `
     INSERT INTO roles (
@@ -142,122 +91,104 @@ export const createRole = async (
       id,
       role_name,
       description,
+      permission_code,
       created_at,
-      updated_at,
-      permission_code
+      updated_at
   `;
 
-  const result = await client.query(
-    query,
-    [
-      roleName,
-      description,
-      JSON.stringify(permissionCode)
-    ]
-  );
+  const result = await client.query(query, [
+    roleName,
+    description ?? null,
+    JSON.stringify(permissionCode)
+  ]);
 
   return result.rows[0];
 };
 
 
-/**
- * Update a role.
- */
+/*
+|--------------------------------------------------------------------------
+| Update role
+|--------------------------------------------------------------------------
+*/
 export const updateRole = async (
   client,
   roleId,
-  {
-    roleName,
-    description,
-    permissionCode
-  }
+  { roleName, description, permissionCode }
 ) => {
   const query = `
     UPDATE roles
     SET
       role_name = COALESCE($1, role_name),
       description = COALESCE($2, description),
-      permission_code =
-        COALESCE($3::jsonb, permission_code),
-      updated_at = now()
+      permission_code = COALESCE($3::jsonb, permission_code),
+      updated_at = NOW()
     WHERE id = $4
     RETURNING
       id,
       role_name,
       description,
+      permission_code,
       created_at,
-      updated_at,
-      permission_code
+      updated_at
   `;
 
-  const result = await client.query(
-    query,
-    [
-      roleName ?? null,
-      description ?? null,
-      permissionCode !== undefined
-        ? JSON.stringify(permissionCode)
-        : null,
-      roleId
-    ]
-  );
+  const result = await client.query(query, [
+    roleName ?? null,
+    description ?? null,
+    permissionCode
+      ? JSON.stringify(permissionCode)
+      : null,
+    roleId
+  ]);
 
   return result.rows[0] || null;
 };
 
 
-/**
- * Delete all permission assignments
- * for a role.
- */
-export const deleteRolePermissions = async (
-  client,
-  roleId
-) => {
-  const query = `
-    DELETE FROM role_permissions
-    WHERE role_id = $1
-  `;
-
+/*
+|--------------------------------------------------------------------------
+| Delete role permissions
+|--------------------------------------------------------------------------
+*/
+export const deleteRolePermissions = async (client, roleId) => {
   await client.query(
-    query,
+    `
+      DELETE FROM role_permissions
+      WHERE role_id = $1
+    `,
     [roleId]
   );
 };
 
 
-/**
- * Add permission assignments to a role.
- */
+/*
+|--------------------------------------------------------------------------
+| Add role permissions
+|--------------------------------------------------------------------------
+*/
 export const addRolePermissions = async (
   client,
   roleId,
   permissionIds
 ) => {
-  if (
-    !permissionIds ||
-    permissionIds.length === 0
-  ) {
+  if (!permissionIds || permissionIds.length === 0) {
     return;
   }
 
   const values = [];
   const placeholders = [];
 
-  permissionIds.forEach(
-    (permissionId, index) => {
-      const position = index * 2;
+  permissionIds.forEach((permissionId, index) => {
+    const roleParam = index * 2 + 1;
+    const permissionParam = index * 2 + 2;
 
-      values.push(
-        roleId,
-        permissionId
-      );
+    values.push(roleId, permissionId);
 
-      placeholders.push(
-        `($${position + 1}, $${position + 2})`
-      );
-    }
-  );
+    placeholders.push(
+      `($${roleParam}, $${permissionParam})`
+    );
+  });
 
   const query = `
     INSERT INTO role_permissions (
@@ -272,53 +203,96 @@ export const addRolePermissions = async (
     DO NOTHING
   `;
 
-  await client.query(
-    query,
-    values
-  );
+  await client.query(query, values);
 };
 
 
-/**
- * Get permissions by their IDs.
- *
- * Example:
- *
- * permission ID ΓåÆ orders_read
- * permission ID ΓåÆ orders_update
- * permission ID ΓåÆ dashboard_read
- */
+/*
+|--------------------------------------------------------------------------
+| Get permissions by IDs
+|--------------------------------------------------------------------------
+*/
 export const getPermissionsByIds = async (
   client,
   permissionIds
 ) => {
-  if (
-    !permissionIds ||
-    permissionIds.length === 0
-  ) {
+  if (!permissionIds || permissionIds.length === 0) {
     return [];
   }
 
   const query = `
     SELECT
       id,
-      permission_name
+      permission_name,
+      created_at
     FROM permissions
     WHERE id = ANY($1::uuid[])
+    ORDER BY permission_name
   `;
 
-  const result = await client.query(
-    query,
-    [permissionIds]
-  );
+  const result = await client.query(query, [permissionIds]);
 
   return result.rows;
 };
 
 
-/**
- * Get a transaction client.
- */
+/*
+|--------------------------------------------------------------------------
+| Get transaction client
+|--------------------------------------------------------------------------
+*/
 export const getTransactionClient = async () => {
-  return await pool.connect();
+  const client = await pool.connect();
+
+  await client.query("BEGIN");
+
+  return client;
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Commit transaction
+|--------------------------------------------------------------------------
+*/
+export const commitTransaction = async (client) => {
+  await client.query("COMMIT");
+  client.release();
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Rollback transaction
+|--------------------------------------------------------------------------
+*/
+export const rollbackTransaction = async (client) => {
+  try {
+    await client.query("ROLLBACK");
+  } finally {
+    client.release();
+  }
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Get permissions for a role
+|--------------------------------------------------------------------------
+*/
+export const getRolePermissions = async (roleId) => {
+  const query = `
+    SELECT
+      p.id AS permission_id,
+      p.permission_name
+    FROM role_permissions rp
+    INNER JOIN permissions p
+      ON p.id = rp.permission_id
+    WHERE rp.role_id = $1
+    ORDER BY p.permission_name
+  `;
+
+  const result = await pool.query(query, [roleId]);
+
+  return result.rows;
 };

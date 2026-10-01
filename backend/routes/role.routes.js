@@ -3,10 +3,13 @@ import express from "express";
 import {
   getRoles,
   getRoleById,
-  createRoleController,
-  updateRoleController,
-  deleteRoleController
+  createRole,
+  updateRole,
+  deleteRole
 } from "../controllers/role.controller.js";
+
+import {authenticate} from "../middleware/authenticate.js";
+import { authorize } from "../middleware/authorize.js";
 
 import {
   validateCreateRole,
@@ -14,10 +17,8 @@ import {
   validateRoleId
 } from "../validators/role.validator.js";
 
-import { authenticate } from "../middleware/authenticate.js";
-import { authorize } from "../middleware/authorize.js";
-
 const router = express.Router();
+
 
 /**
  * @swagger
@@ -26,11 +27,13 @@ const router = express.Router();
  *   description: Role management APIs
  */
 
+
 /**
  * @swagger
  * /api/v1/roles:
  *   get:
  *     summary: Get all roles
+ *     description: Retrieve all roles with their resource-level permissions and allowed actions.
  *     tags:
  *       - Roles
  *     security:
@@ -50,23 +53,25 @@ router.get(
   getRoles
 );
 
+
 /**
  * @swagger
- * /api/v1/roles/{id}:
+ * /api/v1/roles/{roleId}:
  *   get:
  *     summary: Get role by ID
+ *     description: Retrieve a specific role with its resource-level permissions and allowed actions.
  *     tags:
  *       - Roles
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: roleId
  *         required: true
+ *         description: Role UUID
  *         schema:
  *           type: string
  *           format: uuid
- *         description: Role ID
  *     responses:
  *       200:
  *         description: Role retrieved successfully
@@ -80,18 +85,20 @@ router.get(
  *         description: Role not found
  */
 router.get(
-  "/:id",
+  "/:roleId",
   authenticate,
   authorize("roles", "read"),
   validateRoleId,
   getRoleById
 );
 
+
 /**
  * @swagger
  * /api/v1/roles:
  *   post:
  *     summary: Create a role
+ *     description: Create a role with resource-level permissions and actions.
  *     tags:
  *       - Roles
  *     security:
@@ -104,6 +111,7 @@ router.get(
  *             type: object
  *             required:
  *               - roleName
+ *               - permissions
  *             properties:
  *               roleName:
  *                 type: string
@@ -111,16 +119,42 @@ router.get(
  *               description:
  *                 type: string
  *                 nullable: true
- *                 example: Order manager
- *               permissionIds:
+ *                 example: Operations manager
+ *               permissions:
  *                 type: array
- *                 description: IDs of permissions assigned to the role
+ *                 description: Resource permissions assigned to the role.
+ *                 minItems: 1
  *                 items:
- *                   type: string
- *                   format: uuid
+ *                   type: object
+ *                   required:
+ *                     - permissionId
+ *                     - actions
+ *                   properties:
+ *                     permissionId:
+ *                       type: string
+ *                       format: uuid
+ *                       description: ID of the resource in the permissions table.
+ *                     actions:
+ *                       type: array
+ *                       minItems: 1
+ *                       items:
+ *                         type: string
+ *                         enum:
+ *                           - read
+ *                           - insert
+ *                           - update
+ *                           - delete
+ *                       example:
+ *                         - read
+ *                         - update
  *                 example:
- *                   - 550e8400-e29b-41d4-a716-446655440000
- *                   - 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+ *                   - permissionId: e9bd3387-91bb-4962-b951-1af54ea13fc6
+ *                     actions:
+ *                       - read
+ *                   - permissionId: 3fc09e6a-b202-473f-b43d-c4a9f6408064
+ *                     actions:
+ *                       - read
+ *                       - update
  *     responses:
  *       201:
  *         description: Role created successfully
@@ -138,26 +172,28 @@ router.post(
   authenticate,
   authorize("roles", "insert"),
   validateCreateRole,
-  createRoleController
+  createRole
 );
+
 
 /**
  * @swagger
- * /api/v1/roles/{id}:
- *   patch:
+ * /api/v1/roles/{roleId}:
+ *   put:
  *     summary: Update a role
+ *     description: Update role details and optionally replace its complete permission set.
  *     tags:
  *       - Roles
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: roleId
  *         required: true
+ *         description: Role UUID
  *         schema:
  *           type: string
  *           format: uuid
- *         description: Role ID
  *     requestBody:
  *       required: true
  *       content:
@@ -167,20 +203,44 @@ router.post(
  *             properties:
  *               roleName:
  *                 type: string
- *                 example: Manager
+ *                 example: Senior Manager
  *               description:
  *                 type: string
  *                 nullable: true
- *                 example: Updated order manager
- *               permissionIds:
+ *                 example: Updated operations manager
+ *               permissions:
  *                 type: array
- *                 description: Complete list of permission IDs assigned to the role
+ *                 minItems: 1
+ *                 description: Complete replacement permission set when provided.
  *                 items:
- *                   type: string
- *                   format: uuid
+ *                   type: object
+ *                   required:
+ *                     - permissionId
+ *                     - actions
+ *                   properties:
+ *                     permissionId:
+ *                       type: string
+ *                       format: uuid
+ *                     actions:
+ *                       type: array
+ *                       minItems: 1
+ *                       items:
+ *                         type: string
+ *                         enum:
+ *                           - read
+ *                           - insert
+ *                           - update
+ *                           - delete
  *                 example:
- *                   - 550e8400-e29b-41d4-a716-446655440000
- *                   - 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+ *                   - permissionId: e9bd3387-91bb-4962-b951-1af54ea13fc6
+ *                     actions:
+ *                       - read
+ *                       - update
+ *                   - permissionId: 3fc09e6a-b202-473f-b43d-c4a9f6408064
+ *                     actions:
+ *                       - read
+ *                       - update
+ *                       - delete
  *     responses:
  *       200:
  *         description: Role updated successfully
@@ -195,32 +255,34 @@ router.post(
  *       409:
  *         description: Role name already exists
  */
-router.patch(
-  "/:id",
+router.put(
+  "/:roleId",
   authenticate,
   authorize("roles", "update"),
   validateRoleId,
   validateUpdateRole,
-  updateRoleController
+  updateRole
 );
+
 
 /**
  * @swagger
- * /api/v1/roles/{id}:
+ * /api/v1/roles/{roleId}:
  *   delete:
  *     summary: Delete a role
+ *     description: Delete a role and its resource-level permission mappings.
  *     tags:
  *       - Roles
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: roleId
  *         required: true
+ *         description: Role UUID
  *         schema:
  *           type: string
  *           format: uuid
- *         description: Role ID
  *     responses:
  *       200:
  *         description: Role deleted successfully
@@ -232,15 +294,14 @@ router.patch(
  *         description: Permission denied
  *       404:
  *         description: Role not found
- *       409:
- *         description: Role cannot be deleted because it is assigned to employees
  */
 router.delete(
-  "/:id",
+  "/:roleId",
   authenticate,
   authorize("roles", "delete"),
   validateRoleId,
-  deleteRoleController
+  deleteRole
 );
+
 
 export default router;
