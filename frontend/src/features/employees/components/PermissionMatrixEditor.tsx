@@ -287,9 +287,9 @@ export function PermissionMatrixEditor({
           </strong>
 
           <p>
-            Select permissions from the
-            permissions configured in the
-            database.
+            Select backend resource permissions.
+            The API stores actions separately
+            on the role.
           </p>
         </div>
 
@@ -344,7 +344,7 @@ export function PermissionMatrixEditor({
         onClose={() => setOpen(false)}
         eyebrow="PERMISSIONS"
         title="Configure permissions"
-        description="Choose which operations are allowed per section. Permissions shown here are loaded from the database."
+        description="Choose the backend resources assigned to this role. Resource names come from the permissions table; action authorization is enforced by the backend role permission matrix."
         elevated
         widthVariant="wide"
         footer={

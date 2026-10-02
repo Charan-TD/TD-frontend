@@ -4,11 +4,12 @@ import type {
     AuthEmployee,
     AuthRole,
 } from "./models/auth";
+import type { PermissionMap } from "./models/access";
 
 type AuthState = {
     employee: AuthEmployee | null;
     role: AuthRole | null;
-    permissions: string[];
+    permissions: PermissionMap;
     accessToken: string | null;
     refreshToken: string | null;
     isAuthenticated: boolean;
@@ -17,7 +18,7 @@ type AuthState = {
 const initialState: AuthState = {
     employee: null,
     role: null,
-    permissions: [],
+    permissions: {},
     accessToken: null,
     refreshToken: null,
     isAuthenticated: false,
@@ -32,7 +33,7 @@ const authSlice = createSlice({
             action: PayloadAction<{
                 employee: AuthEmployee;
                 role: AuthRole | null;
-                permissions: string[];
+                permissions: PermissionMap;
                 accessToken: string;
                 refreshToken: string;
             }>,
@@ -48,7 +49,7 @@ const authSlice = createSlice({
         clearAuthSession: (state) => {
             state.employee = null;
             state.role = null;
-            state.permissions = [];
+            state.permissions = {};
             state.accessToken = null;
             state.refreshToken = null;
             state.isAuthenticated = false;

@@ -13,11 +13,15 @@ export type Role = {
   memberCount: number;
 };
 
+export type RolePermissionInput = {
+  permissionId: string;
+  actions: Array<"read" | "insert" | "update" | "delete">;
+};
+
 export type CreateRoleInput = {
   name: string;
   description?: string;
-  permissionIds: string[];
-  permissionCode?: PermissionMatrix;
+  permissions: RolePermissionInput[];
 };
 
 type PermissionList = { permissions: DbPermission[]; pagination: Pagination };
@@ -73,13 +77,13 @@ export const rolesApi = baseApi.injectEndpoints({
     }),
 
     createRole: builder.mutation<Role, CreateRoleInput>({
-      query: ({ name, description, permissionIds }) => ({
+      query: ({ name, description, permissions }) => ({
         url: "/roles",
         method: "POST",
         body: {
           roleName: name.trim(),
           description: description?.trim() || null,
-          permissionIds: Array.from(new Set(permissionIds)),
+          permissions,
         },
       }),
       transformResponse: (response: { success: boolean; data: DbRole & { permissions?: Array<{ permission_id: string; permission_name: string }> } }) =>
@@ -87,14 +91,14 @@ export const rolesApi = baseApi.injectEndpoints({
       invalidatesTags: ["Role", "Permission", "Employee"],
     }),
 
-    updateRole: builder.mutation<Role, { id: string; name?: string; description?: string; permissionIds?: string[] }>({
-      query: ({ id, name, description, permissionIds }) => ({
+    updateRole: builder.mutation<Role, { id: string; name?: string; description?: string; permissions?: RolePermissionInput[] }>({
+      query: ({ id, name, description, permissions }) => ({
         url: `/roles/${id}`,
-        method: "PATCH",
+        method: "PUT",
         body: {
           ...(name !== undefined ? { roleName: name.trim() } : {}),
-          ...(description !== undefined ? { description: description.trim() } : {}),
-          ...(permissionIds !== undefined ? { permissionIds: Array.from(new Set(permissionIds)) } : {}),
+          ...(description !== undefined ? { description: description.trim() || null } : {}),
+          ...(permissions !== undefined ? { permissions } : {}),
         },
       }),
       transformResponse: (response: { success: boolean; data: DbRole & { permissions?: Array<{ permission_id: string; permission_name: string }> } }) =>

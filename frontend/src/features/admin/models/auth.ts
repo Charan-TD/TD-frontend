@@ -1,3 +1,5 @@
+import type { PermissionMap } from "./access";
+
 export type AuthEmployee = {
     id: string;
     emp_id: string;
@@ -15,7 +17,7 @@ export type AuthRole = {
 export type AuthSession = {
     employee: AuthEmployee | null;
     role: AuthRole | null;
-    permissions: string[];
+    permissions: PermissionMap;
     accessToken: string | null;
     refreshToken: string | null;
 };

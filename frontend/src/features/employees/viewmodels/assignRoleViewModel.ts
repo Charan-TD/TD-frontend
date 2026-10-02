@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { can, type PermissionMap } from "../../admin/models/access";
 
 import {
   useAssignEmployeeAccessMutation,
@@ -19,7 +20,32 @@ import type { Role } from "../api/rolesApi";
 
 type AssignRoleViewModelProps = {
   onSaved?: () => void;
+  permissions: PermissionMap;
 };
+
+
+const ALL_ROLE_ACTIONS = ["read", "insert", "update", "delete"] as const;
+
+function buildRolePermissionPayload(
+  permissionIds: string[],
+  availablePermissions: Array<{ id: string; permission_name: string }>,
+  matrix: PermissionMatrix = {},
+) {
+  const byId = new Map(availablePermissions.map((permission) => [permission.id, permission]));
+
+  return Array.from(new Set(permissionIds)).flatMap((permissionId) => {
+    const permission = byId.get(permissionId);
+    if (!permission) return [];
+
+    const resource = permission.permission_name.trim().toLowerCase();
+    const configured = matrix[resource as keyof PermissionMatrix];
+    const actions = configured && configured.length > 0
+      ? configured
+      : [...ALL_ROLE_ACTIONS];
+
+    return [{ permissionId, actions }];
+  });
+}
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === "string") {
@@ -60,9 +86,9 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function useAssignRoleViewModel(
-  props: AssignRoleViewModelProps = {}
+  props: AssignRoleViewModelProps
 ) {
-  const { onSaved } = props;
+  const { onSaved, permissions: authPermissions } = props;
 
   const {
     data: employeesData,
@@ -72,6 +98,9 @@ export function useAssignRoleViewModel(
   } = useGetEmployeesQuery({
     page: 1,
     limit: 100,
+    includeRoleMetadata:
+      can(authPermissions, "employee_roles", "read") &&
+      can(authPermissions, "roles", "read"),
   });
 
   const employees =
@@ -82,14 +111,18 @@ export function useAssignRoleViewModel(
     isLoading: isRolesLoading,
     isFetching: isRolesFetching,
     error: rolesError,
-  } = useGetRolesQuery();
+  } = useGetRolesQuery(undefined, {
+    skip: !can(authPermissions, "roles", "read"),
+  });
 
   const {
     data: permissions = [],
     isLoading: isPermissionsLoading,
     isFetching: isPermissionsFetching,
     error: permissionsError,
-  } = useGetPermissionsQuery();
+  } = useGetPermissionsQuery(undefined, {
+    skip: !can(authPermissions, "permissions", "read"),
+  });
 
   const [assignEmployeeAccess, { isLoading: isSaving }] =
     useAssignEmployeeAccessMutation();
@@ -200,8 +233,7 @@ export function useAssignRoleViewModel(
       const role = await createRoleMutation({
         name: name.trim(),
         description: description.trim(),
-        permissionIds,
-        permissionCode,
+        permissions: buildRolePermissionPayload(permissionIds, permissions, permissionCode),
       }).unwrap();
 
       setRoleName(role.name);
@@ -228,7 +260,11 @@ export function useAssignRoleViewModel(
         id,
         name: name.trim(),
         description: description.trim(),
-        permissionIds,
+        permissions: buildRolePermissionPayload(
+          permissionIds,
+          permissions,
+          selectedRole?.matrix ?? {},
+        ),
       }).unwrap();
       setRoleName(role.name);
       setSavedMessage("Role permissions updated successfully.");

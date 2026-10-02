@@ -27,6 +27,7 @@ export function DashboardView({ metrics, activities, access, onNavigateManagemen
         reports: { label: "Reports", value: "—", trend: "Coming soon", icon: "chart" as const, tone: "indigo" as const },
         employees: { label: "Employees", value: "24", trend: "Access managed by admin", icon: "users" as const, tone: "orange" as const },
         stations: { label: "Stations", value: "14", trend: "All operational", icon: "station" as const, tone: "mint" as const },
+        trains: { label: "Trains", value: "—", trend: "Train operations", icon: "chart" as const, tone: "indigo" as const },
       }[item])).filter(Boolean) as Metric[];
   const liveMetrics: Metric[] = [
     { label: "Orders", value: ordersLoading ? "…" : ordersError ? "—" : String(orders?.length ?? 0), trend: ordersError ? "API unavailable" : "Live from orders", icon: "bag", tone: "indigo" },

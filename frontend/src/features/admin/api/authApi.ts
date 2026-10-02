@@ -4,6 +4,7 @@ import type {
     AuthEmployee,
     AuthRole,
 } from "../models/auth";
+import type { PermissionMap } from "../models/access";
 
 export type EmployeeLoginRequest = {
     email: string;
@@ -13,7 +14,7 @@ export type EmployeeLoginRequest = {
 export type EmployeeLoginData = {
     employee: AuthEmployee;
     role: AuthRole | null;
-    permissions: string[];
+    permissions: PermissionMap | string[];
     accessToken: string;
     refreshToken: string;
 };
@@ -26,8 +27,9 @@ export type EmployeeLoginResponse = {
 
 export type EmployeeMeData = {
     employee: AuthEmployee;
-    role: AuthRole | null;
-    permissions: string[];
+    // Keep these optional for compatibility if /me is temporarily narrower than login.
+    role?: AuthRole | null;
+    permissions?: PermissionMap | string[];
 };
 
 export type EmployeeMeResponse = {

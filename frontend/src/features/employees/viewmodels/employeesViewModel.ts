@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { can, type PermissionMap } from "../../admin/models/access";
 
 import {
   useCreateEmployeeMutation,
@@ -35,7 +36,30 @@ type CreateEmployeeFormInput = {
 
 const PAGE_SIZE = 8;
 
-export function useEmployeesViewModel() {
+const ALL_ROLE_ACTIONS = ["read", "insert", "update", "delete"] as const;
+
+function buildRolePermissionPayload(
+  permissionIds: string[],
+  availablePermissions: Array<{ id: string; permission_name: string }>,
+  matrix: PermissionMatrix = {},
+) {
+  const byId = new Map(availablePermissions.map((permission) => [permission.id, permission]));
+
+  return Array.from(new Set(permissionIds)).flatMap((permissionId) => {
+    const permission = byId.get(permissionId);
+    if (!permission) return [];
+
+    const resource = permission.permission_name.trim().toLowerCase();
+    const configured = matrix[resource as keyof PermissionMatrix];
+    const actions = configured && configured.length > 0
+      ? configured
+      : [...ALL_ROLE_ACTIONS];
+
+    return [{ permissionId, actions }];
+  });
+}
+
+export function useEmployeesViewModel(authPermissions: PermissionMap) {
   const [page, setPage] =
     useState(1);
 
@@ -48,6 +72,9 @@ export function useEmployeesViewModel() {
   } = useGetEmployeesQuery({
     page,
     limit: PAGE_SIZE,
+    includeRoleMetadata:
+      can(authPermissions, "employee_roles", "read") &&
+      can(authPermissions, "roles", "read"),
   });
 
   const employees =
@@ -62,13 +89,17 @@ export function useEmployeesViewModel() {
     data: roles = [],
     isFetching:
     isRolesFetching,
-  } = useGetRolesQuery();
+  } = useGetRolesQuery(undefined, {
+    skip: !can(authPermissions, "roles", "read"),
+  });
 
   const {
     data: permissions = [],
     isFetching:
     isPermissionsFetching,
-  } = useGetPermissionsQuery();
+  } = useGetPermissionsQuery(undefined, {
+    skip: !can(authPermissions, "permissions", "read"),
+  });
 
   const {
     data: lastEmployeeId,
@@ -214,10 +245,11 @@ export function useEmployeesViewModel() {
               name: roleName,
               description:
                 input.roleDescription ?? "",
-              permissionIds:
+              permissions: buildRolePermissionPayload(
                 input.permissionIds,
-              permissionCode:
+                permissions,
                 input.permissionCode ?? {},
+              ),
             }).unwrap();
 
           roleName = createdRole.name;

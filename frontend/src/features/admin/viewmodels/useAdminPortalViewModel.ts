@@ -13,7 +13,7 @@ import { baseApi } from "../api/baseApi";
 import { clearAuthSession } from "../authSlice";
 import { store } from "../store";
 import {
-  buildPermissionMap,
+  normalizePermissionMap,
   can,
   sectionsWithRead,
   type PermissionAction,
@@ -46,17 +46,49 @@ function buildAdminProfile(
   session: EmployeeMeData,
   previous?: AdminProfile,
 ): AdminProfile {
-  const permissions = buildPermissionMap(session.permissions);
   const sameEmployee = previous?.employeeId === session.employee.id;
+
+  let permissionMap = session.permissions;
+  let roleName = session.role?.name;
+
+  if ((!permissionMap || Object.keys(permissionMap).length === 0) && sameEmployee && previous) {
+    permissionMap = previous.permissions;
+  }
+
+  if (typeof window !== "undefined") {
+    if (!permissionMap || Object.keys(permissionMap).length === 0) {
+      try {
+        permissionMap = JSON.parse(
+          localStorage.getItem("train_dabba_permissions") || "{}",
+        );
+      } catch {
+        permissionMap = {};
+      }
+    }
+
+    if (!roleName) {
+      try {
+        const storedRole = JSON.parse(
+          localStorage.getItem("train_dabba_role") || "null",
+        );
+        if (storedRole && typeof storedRole.name === "string") {
+          roleName = storedRole.name;
+        }
+      } catch {
+        // Keep the previous/default role label below.
+      }
+    }
+  }
+
+  const permissions = normalizePermissionMap(permissionMap);
 
   return {
     employeeId: session.employee.id,
     name: session.employee.name,
     email: session.employee.email,
-    // Local-only edits survive a background /me refresh for the same employee.
     phone: sameEmployee ? previous!.phone : "",
     location: sameEmployee ? previous!.location : "",
-    role: session.role?.name ?? "Employee",
+    role: roleName ?? (sameEmployee ? previous?.role : undefined) ?? "Employee",
     lastLogin: "Today",
     access: sectionsWithRead(permissions),
     permissions,
@@ -87,7 +119,23 @@ export function useAdminPortalViewModel() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
-    setAccessToken(localStorage.getItem("train_dabba_access_token"));
+    const token = localStorage.getItem("train_dabba_access_token");
+    setAccessToken(token);
+
+    if (!token) return;
+
+    try {
+      const employee = JSON.parse(localStorage.getItem("train_dabba_employee") || "null");
+      const role = JSON.parse(localStorage.getItem("train_dabba_role") || "null");
+      const permissions = JSON.parse(localStorage.getItem("train_dabba_permissions") || "{}");
+
+      if (employee?.id && permissions) {
+        setAdmin(buildAdminProfile({ employee, role, permissions: normalizePermissionMap(permissions) }));
+        setScreen("dashboard");
+      }
+    } catch {
+      // Invalid stored JSON is ignored; /me or a new login will recover state.
+    }
   }, []);
 
   // `currentData` (not `data`) is used on purpose: it is undefined until the

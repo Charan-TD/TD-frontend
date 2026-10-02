@@ -1,16 +1,14 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-if (!apiBaseUrl) {
-  throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
-}
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
+  "https://train-dhaba-backend-dev.up.railway.app/api/v1";
 
 export const baseApi = createApi({
   reducerPath: "baseApi",
 
   baseQuery: fetchBaseQuery({
-    baseUrl: apiBaseUrl,
+    baseUrl: API_BASE_URL,
 
     prepareHeaders: (headers) => {
       headers.set("Content-Type", "application/json");

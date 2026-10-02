@@ -13,7 +13,7 @@ export function AssignRoleView({
   onBack?: () => void;
   permissions: PermissionMap;
 }) {
-  const vm = useAssignRoleViewModel();
+  const vm = useAssignRoleViewModel({ permissions });
   const canCreateRole = can(permissions, "roles", "insert");
   const canUpdateRole = can(permissions, "roles", "update");
   const canCreatePermission = can(permissions, "permissions", "insert");
@@ -188,8 +188,6 @@ export function AssignRoleView({
           permissions={vm.permissions}
           onChange={setNewRolePermissionIds}
           disabled={vm.isCreatingRole}
-          onCreatePermission={canCreatePermission ? vm.createPermission : undefined}
-          isCreatingPermission={vm.isCreatingPermission}
         />
 
         <div className="assign-role-actions">
@@ -248,8 +246,6 @@ export function AssignRoleView({
               permissions={vm.permissions}
               onChange={setEditPermissionIds}
               disabled={vm.isUpdatingRole}
-              onCreatePermission={canCreatePermission ? vm.createPermission : undefined}
-              isCreatingPermission={vm.isCreatingPermission}
             />
             <div className="assign-role-actions">
               <button

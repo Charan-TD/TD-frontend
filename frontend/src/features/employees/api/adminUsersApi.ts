@@ -106,11 +106,12 @@ export const adminUsersApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getEmployees: builder.query<
       { employees: Employee[]; total: number; pagination: Pagination },
-      { page?: number; limit?: number }
+      { page?: number; limit?: number; includeRoleMetadata?: boolean }
     >({
       async queryFn(arg = {}, _api, _extraOptions, baseQuery) {
         const page = arg.page ?? 1;
         const limit = arg.limit ?? 10;
+        const includeRoleMetadata = arg.includeRoleMetadata ?? false;
 
         const employeesResponse = await baseQuery({
           url: "/employees",
@@ -133,8 +134,8 @@ export const adminUsersApi = baseApi.injectEndpoints({
           return { data: { employees: [], total: pagination.total, pagination } };
         }
 
-        const assignments = await loadEmployeeRoles(baseQuery);
-        const roles = await loadRoles(baseQuery);
+        const assignments = includeRoleMetadata ? await loadEmployeeRoles(baseQuery) : [];
+        const roles = includeRoleMetadata ? await loadRoles(baseQuery) : [];
         const roleMap = new Map(roles.map((role) => [role.id, role]));
         const assignmentMap = new Map(assignments.map((assignment) => [assignment.employee_id, assignment]));
 

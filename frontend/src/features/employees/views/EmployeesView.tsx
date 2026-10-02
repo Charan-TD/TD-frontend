@@ -34,7 +34,7 @@ export function EmployeesView({
   /** Accepted for compatibility with the caller; not used by this view. */
   onOpenDetails?: (employeeId: string) => void;
 }) {
-  const vm = useEmployeesViewModel();
+  const vm = useEmployeesViewModel(permissions);
   const canAddEmployee = can(permissions, "employees", "insert");
   const canCreateRole = can(permissions, "roles", "insert");
   const canCreatePermission = can(permissions, "permissions", "insert");
@@ -655,8 +655,6 @@ export function EmployeesView({
                 permissions={vm.permissions}
                 onChange={setPermissionIds}
                 disabled={isCreating}
-                onCreatePermission={canCreatePermission ? vm.createPermission : undefined}
-                isCreatingPermission={vm.isCreatingPermission}
               />
             </div>
           </>

@@ -1,12 +1,7 @@
 import type { PortalSection } from "./portal";
 
-/**
- * Operations the backend understands. `authorize(resource, action)` in
- * backend/middleware/authorize.js only ever checks these four.
- */
+/** Backend action names used by authorize(resource, action). */
 export type PermissionAction = "read" | "insert" | "update" | "delete";
-
-/** e.g. { orders: ["read"], riders: ["read", "update"] } */
 export type PermissionMap = Record<string, PermissionAction[]>;
 
 export const PORTAL_SECTIONS: PortalSection[] = [
@@ -16,57 +11,56 @@ export const PORTAL_SECTIONS: PortalSection[] = [
   "restaurants",
   "orders",
   "sales",
-  "marketing",
-  "reports",
   "employees",
   "stations",
+  "trains",
 ];
 
-const ACTIONS: readonly string[] = ["read", "insert", "update", "delete"];
+const VALID_ACTIONS = new Set<PermissionAction>([
+  "read",
+  "insert",
+  "update",
+  "delete",
+]);
 
 /**
- * Splits one permission name into { resource, action }.
- *
- * The database convention is `<resource>_<action>` (orders_read,
- * employee_roles_update). Resource names may contain underscores, so the
- * action is always the LAST segment - the same rule the backend uses when it
- * builds roles.permission_code. `<action>_<resource>` (read_orders) is also
- * accepted so a differently-worded permission row does not silently vanish.
+ * Normalizes the backend action-level permission matrix.
+ * Example: { employees: ["read", "insert"], roles: ["read"] }
  */
-export function parsePermission(
-  name: string,
-): { resource: string; action: PermissionAction } | null {
-  const normalized = name.trim().toLowerCase();
+export function normalizePermissionMap(value: unknown): PermissionMap {
+  if (!value) return {};
 
-  const last = normalized.lastIndexOf("_");
-  if (last > 0) {
-    const action = normalized.slice(last + 1);
-    if (ACTIONS.includes(action)) {
-      return { resource: normalized.slice(0, last), action: action as PermissionAction };
-    }
+  // Backward compatibility for sessions created before the backend started
+  // returning the action-level matrix. A legacy array only proves section
+  // visibility/read access; never infer insert/update/delete from it.
+  if (Array.isArray(value)) {
+    const legacy: PermissionMap = {};
+    value
+      .filter((resource): resource is string => typeof resource === "string")
+      .map((resource) => resource.trim().toLowerCase())
+      .filter(Boolean)
+      .forEach((resource) => {
+        legacy[resource] = ["read"];
+      });
+    return legacy;
   }
 
-  const first = normalized.indexOf("_");
-  if (first > 0) {
-    const action = normalized.slice(0, first);
-    if (ACTIONS.includes(action)) {
-      return { resource: normalized.slice(first + 1), action: action as PermissionAction };
-    }
-  }
+  if (typeof value !== "object") return {};
 
-  return null;
-}
-
-export function buildPermissionMap(permissionNames: string[] | undefined | null): PermissionMap {
   const map: PermissionMap = {};
 
-  (permissionNames ?? []).forEach((name) => {
-    if (typeof name !== "string") return;
-    const parsed = parsePermission(name);
-    if (!parsed) return;
+  Object.entries(value as Record<string, unknown>).forEach(([resource, actions]) => {
+    const normalizedResource = resource.trim().toLowerCase();
+    if (!normalizedResource || !Array.isArray(actions)) return;
 
-    const current = map[parsed.resource] ?? [];
-    if (!current.includes(parsed.action)) map[parsed.resource] = [...current, parsed.action];
+    const normalizedActions = actions
+      .filter((action): action is string => typeof action === "string")
+      .map((action) => action.trim().toLowerCase())
+      .filter((action): action is PermissionAction =>
+        VALID_ACTIONS.has(action as PermissionAction),
+      );
+
+    map[normalizedResource] = Array.from(new Set(normalizedActions));
   });
 
   return map;
@@ -82,19 +76,10 @@ export function can(
   return (map?.[resource] ?? []).includes(action);
 }
 
-/**
- * A section is visible only when the employee can READ it - opening a
- * section means listing its records. Holding only e.g. `employees_insert`
- * is not enough to open the Employees page.
- */
 export function sectionsWithRead(map: AnyPermissionMap): PortalSection[] {
   return PORTAL_SECTIONS.filter((section) => can(map, section, "read"));
 }
 
-/**
- * Returns the permission names still missing for a set of requirements.
- * An empty array means the action is allowed.
- */
 export function missingPermissions(
   map: AnyPermissionMap | undefined,
   requirements: Array<[resource: string, action: PermissionAction]>,
