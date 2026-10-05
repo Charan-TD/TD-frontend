@@ -74,12 +74,7 @@ export type AdminPermissionCode =
   | "delete"
   | "insert";
 
-export type PermissionMatrix = Partial<
-  Record<
-    PortalSection,
-    AdminPermissionCode[]
-  >
->;
+export type PermissionMatrix = Partial<Record<string, AdminPermissionCode[]>>;
 
 export type DbPermission = {
   id: string;
@@ -91,14 +86,33 @@ export type EmployeeStatus =
   | "Active"
   | "Inactive";
 
+export type EmployeeRoleSummary = {
+  /** employee_roles row id (the assignment itself). */
+  assignmentId: string;
+  /** roles.id */
+  id: string;
+  name: string;
+  status: EmployeeStatus;
+};
+
 export type Employee = {
   id: string;
   empId: string;
   name: string;
   email: string;
 
+  /**
+   * Comma-joined role names (kept for search / legacy display).
+   * Use `roles` to render each assigned role individually.
+   */
   role: string;
   roleId?: string;
+
+  /**
+   * Every role assigned through employee_roles.
+   */
+  roles: EmployeeRoleSummary[];
+  roleIds: string[];
 
   status: EmployeeStatus;
 

@@ -8,8 +8,11 @@ import type { CustomerUser } from "../models/customerUser";
 import { Icon } from "../components/Icon";
 import { ComingSoonPanel } from "../components/ComingSoonPanel";
 import { UserAvatar } from "../components/UserAvatar";
+import { SkeletonTable } from "../components/Skeleton";
+import { noAccess } from "../models/disabledReason";
 
 import {
+  isUserBlocked,
   useUsersViewModel,
   type UserWorkspace,
 } from "../viewmodels/usersViewModel";
@@ -25,6 +28,8 @@ type Props = {
   selectedServiceId: string;
   selectedSubsection: string;
   onSelectService: (id: string, subsectionId?: string) => void;
+  /** Whether the signed-in person may block / unblock users. */
+  canUpdateUsers: boolean;
 };
 
 export function ManagementView({
@@ -33,6 +38,7 @@ export function ManagementView({
   selectedServiceId,
   selectedSubsection,
   onSelectService,
+  canUpdateUsers,
 }: Props) {
   const activeModule =
     modules.find((module) => module.id === selectedServiceId) ??
@@ -46,6 +52,7 @@ export function ManagementView({
       <UsersWorkspace
         subsection={selectedSubsection as UserWorkspaceMap}
         userActivities={userActivities}
+        canUpdateUsers={canUpdateUsers}
       />
     );
   }
@@ -128,9 +135,11 @@ type UserWorkspaceMap =
 function UsersWorkspace({
   subsection,
   userActivities,
+  canUpdateUsers,
 }: {
   subsection: UserWorkspaceMap;
   userActivities: UserActivity[];
+  canUpdateUsers: boolean;
 }) {
   if (subsection === "users-complaints") {
     return (
@@ -191,15 +200,21 @@ function UsersWorkspace({
   return (
     <UsersTable
       blockedOnly={subsection === "users-blocked"}
+      canUpdateUsers={canUpdateUsers}
     />
   );
 }
 
 function UsersTable({
   blockedOnly,
+  canUpdateUsers,
 }: {
   blockedOnly: boolean;
+  canUpdateUsers: boolean;
 }) {
+  const blockUserHint = (user: CustomerUser) =>
+    noAccess(isUserBlocked(user) ? "unblock users" : "block users");
+
   const vm = useUsersViewModel(
     blockedOnly ? "blocked" : "all"
   );
@@ -226,10 +241,17 @@ function UsersTable({
           className="secondary-button"
           onClick={() => vm.refresh()}
           disabled={vm.isFetching}
+          data-tooltip={vm.isFetching ? "Already refreshing the user list" : undefined}
         >
           Refresh
         </button>
       </header>
+
+      {vm.errorMessage && (
+        <div className="api-state api-state--error">
+          {vm.errorMessage}
+        </div>
+      )}
 
       <div className="user-toolbar">
         <input
@@ -249,9 +271,9 @@ function UsersTable({
       </div>
 
       {vm.isLoading && (
-        <div className="api-state">
-          Loading users…
-        </div>
+        <SkeletonTable
+          columns={["User", "Email", "Phone", "Status", "Action"]}
+        />
       )}
 
       {vm.isError && (
@@ -332,12 +354,11 @@ function UsersTable({
                         onClick={() =>
                           vm.toggleBlock(user)
                         }
-                        disabled={vm.isUpdating}
+                        disabled={!canUpdateUsers || vm.isUpdating}
+                        data-tooltip={!canUpdateUsers ? blockUserHint(user) : vm.isUpdating ? "Please wait, another user's status is being updated" : undefined}
+                        data-tooltip-kind={canUpdateUsers ? undefined : "access"}
                       >
-                        {String(
-                          user.status
-                        ).toLowerCase() ===
-                          "blocked"
+                        {isUserBlocked(user)
                           ? "Unblock"
                           : "Block"}
                       </button>
@@ -363,6 +384,7 @@ function UsersTable({
                 !vm.hasPreviousPage ||
                 vm.isFetching
               }
+              data-tooltip={!vm.hasPreviousPage ? "You are already on the first page" : vm.isFetching ? "Still loading, please wait" : undefined}
             >
               ← Previous
             </button>
@@ -379,6 +401,7 @@ function UsersTable({
                 !vm.hasNextPage ||
                 vm.isFetching
               }
+              data-tooltip={!vm.hasNextPage ? "You are already on the last page" : vm.isFetching ? "Still loading, please wait" : undefined}
             >
               Next →
             </button>
@@ -396,6 +419,7 @@ function UsersTable({
             vm.toggleBlock(vm.selectedUser!)
           }
           isUpdating={vm.isUpdating}
+          canUpdate={canUpdateUsers}
         />
       )}
     </section>
@@ -407,14 +431,31 @@ function UserDetailsPanel({
   onClose,
   onToggleBlock,
   isUpdating,
+  canUpdate,
 }: {
   user: CustomerUser;
   onClose: () => void;
   onToggleBlock: () => void;
   isUpdating: boolean;
+  canUpdate: boolean;
 }) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="user-details-panel">
+    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className="modal-card modal-card--pop user-details-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="User details"
+      onClick={(event) => event.stopPropagation()}
+    >
       <div className="user-details-header">
         <div className="user-cell">
           <UserAvatar
@@ -475,8 +516,6 @@ function UserDetailsPanel({
 
       <div className="read-only-note">
         Registered user information is view-only.
-        Admin actions here are limited to account
-        status.
       </div>
 
       <div className="user-details-actions">
@@ -490,14 +529,16 @@ function UserDetailsPanel({
         <button
           className="primary-button"
           onClick={onToggleBlock}
-          disabled={isUpdating}
+          disabled={!canUpdate || isUpdating}
+          data-tooltip={!canUpdate ? noAccess(isUserBlocked(user) ? "unblock users" : "block users") : isUpdating ? "Please wait, the user's status is being updated" : undefined}
+          data-tooltip-kind={canUpdate ? undefined : "access"}
         >
-          {String(user.status).toLowerCase() ===
-            "blocked"
+          {isUserBlocked(user)
             ? "Unblock user"
             : "Block user"}
         </button>
       </div>
+    </div>
     </div>
   );
 }
@@ -997,6 +1038,12 @@ function RestaurantList({
         </div>
       )}
 
+      {loading && !error && (
+        <SkeletonTable
+          columns={["Restaurant", "ID", "Status", "Action"]}
+        />
+      )}
+
       {!loading && !error && (
         <div className="user-table-wrap">
           <table className="user-table">
@@ -1114,11 +1161,7 @@ function OperationalWorkspace({
         </div>
       )}
 
-      {loading && (
-        <div className="api-state">
-          Loading data…
-        </div>
-      )}
+      {loading && <SkeletonTable columns={columns} />}
 
       {!loading && !error && (
         <div className="user-table-wrap">

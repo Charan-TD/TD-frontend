@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { PermissionMatrix } from "../models/employee";
 import { can, type PermissionMap } from "../../admin/models/access";
+import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 
 import {
   useEmployeesViewModel,
@@ -19,25 +21,32 @@ import {
   SidePanel,
 } from "../../admin/components/SidePanel";
 
+import {
+  SkeletonTable,
+} from "../../admin/components/Skeleton";
+
 
 export function EmployeesView({
   onManageRoles,
   permissions,
   autoOpenCreate = false,
   onAutoOpenHandled,
+  onOpenDetails,
 }: {
   onManageRoles?: () => void;
   permissions: PermissionMap;
   /** Opens the "Add employee" panel automatically (e.g. from the topbar quick action). */
   autoOpenCreate?: boolean;
   onAutoOpenHandled?: () => void;
-  /** Accepted for compatibility with the caller; not used by this view. */
+  /** Opens the employee profile (view / edit). */
   onOpenDetails?: (employeeId: string) => void;
 }) {
   const vm = useEmployeesViewModel(permissions);
   const canAddEmployee = can(permissions, "employees", "insert");
   const canCreateRole = can(permissions, "roles", "insert");
   const canCreatePermission = can(permissions, "permissions", "insert");
+  const canChangeStatus = can(permissions, "employees", "update");
+  const canOpenRoles = canCreateRole || can(permissions, "roles", "read");
 
   const [
     showCreate,
@@ -48,6 +57,19 @@ export function EmployeesView({
     employeeId,
     setEmployeeId,
   ] = useState("");
+
+  // True once the admin types their own ID; until then the field
+  // follows the suggestion so it never shows a stale fallback.
+  const [
+    employeeIdEdited,
+    setEmployeeIdEdited,
+  ] = useState(false);
+
+  useEffect(() => {
+    if (showCreate && !employeeIdEdited) {
+      setEmployeeId(vm.suggestedEmployeeId);
+    }
+  }, [showCreate, employeeIdEdited, vm.suggestedEmployeeId]);
 
   const [
     name,
@@ -82,19 +104,20 @@ export function EmployeesView({
   ] = useState("");
 
   const [
-    permissionIds,
-    setPermissionIds,
-  ] = useState<string[]>([]);
+    permissionMatrix,
+    setPermissionMatrix,
+  ] = useState<PermissionMatrix>({});
 
   const resetForm = () => {
     setEmployeeId("");
+    setEmployeeIdEdited(false);
     setName("");
     setEmail("");
     setPassword("");
     setRoleMode("existing");
     setRole("");
     setRoleDescription("");
-    setPermissionIds([]);
+    setPermissionMatrix({});
   };
 
   const submit = async () => {
@@ -110,7 +133,7 @@ export function EmployeesView({
 
     if (
       roleMode === "new" &&
-      permissionIds.length === 0
+      Object.values(permissionMatrix).every((actions) => !actions || actions.length === 0)
     ) {
       return;
     }
@@ -124,7 +147,7 @@ export function EmployeesView({
         roleMode,
         roleName: role,
         roleDescription,
-        permissionIds,
+        permissionCode: permissionMatrix,
       });
 
     if (result.success) {
@@ -152,6 +175,20 @@ export function EmployeesView({
     vm.isCreating ||
     vm.isCreatingRole;
 
+  const createBlockedReason = disabledReason(
+    [isCreating, "Please wait, the employee is being created"],
+    [!employeeId.trim(), "Enter an employee ID"],
+    [!name.trim(), "Enter the employee's name"],
+    [!email.trim(), "Enter the employee's email"],
+    [password.length < 8, "Password must be at least 8 characters"],
+    [!role.trim(), roleMode === "new" ? "Enter a name for the new role" : "Select a role"],
+    [
+      roleMode === "new" &&
+        Object.values(permissionMatrix).every((actions) => !actions || actions.length === 0),
+      "Give the new role at least one permission",
+    ],
+  );
+
   return (
     <section className="employee-workspace">
       {/* ================================
@@ -174,6 +211,7 @@ export function EmployeesView({
             type="button"
             onClick={vm.refresh}
             disabled={vm.isFetching}
+            data-tooltip={vm.isFetching ? "Already refreshing the employee list" : undefined}
           >
             {vm.isFetching
               ? "Refreshing…"
@@ -185,15 +223,20 @@ export function EmployeesView({
               className="secondary-button"
               type="button"
               onClick={onManageRoles}
-              disabled={!canCreateRole && !can(permissions, "roles", "read")}
+              disabled={!canOpenRoles}
+              data-tooltip={canOpenRoles ? undefined : noAccess("view or manage roles")}
+              data-tooltip-kind="access"
             >
               Roles &amp; access
             </button>
           )}
 
-          {canAddEmployee && <button
+          <button
             className="primary-button"
             type="button"
+            disabled={!canAddEmployee}
+            data-tooltip={canAddEmployee ? undefined : noAccess("add employees")}
+            data-tooltip-kind="access"
             onClick={() => {
               resetForm();
               setEmployeeId(vm.suggestedEmployeeId);
@@ -201,7 +244,7 @@ export function EmployeesView({
             }}
           >
             Add employee
-          </button>}
+          </button>
         </div>
       </header>
 
@@ -249,9 +292,9 @@ export function EmployeesView({
       ================================= */}
 
       {vm.isLoading && (
-        <div className="api-state">
-          Loading directory…
-        </div>
+        <SkeletonTable
+          columns={["Member", "Employee Id", "Mail", "Role", "Status", "Action"]}
+        />
       )}
 
       {/* ================================
@@ -270,7 +313,7 @@ export function EmployeesView({
 
       {!vm.isLoading &&
         !vm.isError && (
-          <div className="employee-table-wrap">
+          <div className={`employee-table-wrap${vm.isFetching ? " is-refreshing" : ""}`}>
             <table className="employee-table">
               <thead>
                 <tr>
@@ -304,7 +347,22 @@ export function EmployeesView({
                       </td>
 
                       <td>
-                        {employee.role}
+                        {employee.roles.length ? (
+                          <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>
+                            {employee.roles.map((role) => (
+                              <span
+                                key={role.id}
+                                className="role-pill"
+                                data-tooltip={role.status === "Inactive" ? "Inactive assignment" : undefined}
+                                style={role.status === "Inactive" ? { opacity: 0.5 } : undefined}
+                              >
+                                {role.name}
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          "Unassigned"
+                        )}
                       </td>
 
                       <td>
@@ -314,6 +372,18 @@ export function EmployeesView({
                       </td>
 
                       <td>
+                        {onOpenDetails && (
+                          <button
+                            className="table-action"
+                            type="button"
+                            onClick={() =>
+                              onOpenDetails(employee.id)
+                            }
+                          >
+                            View
+                          </button>
+                        )}
+
                         <button
                           className="table-action"
                           type="button"
@@ -327,8 +397,11 @@ export function EmployeesView({
                             )
                           }
                           disabled={
+                            !canChangeStatus ||
                             vm.isUpdatingStatus
                           }
+                          data-tooltip={!canChangeStatus ? noAccess("activate or deactivate employees") : vm.isUpdatingStatus ? "Please wait, another status change is being saved" : undefined}
+                          data-tooltip-kind={canChangeStatus ? undefined : "access"}
                         >
                           {employee.status ===
                             "Active"
@@ -386,6 +459,7 @@ export function EmployeesView({
                   vm.page === 1 ||
                   vm.isFetching
                 }
+                data-tooltip={vm.page === 1 ? "You are already on the first page" : vm.isFetching ? "Still loading, please wait" : undefined}
               >
                 Previous
               </button>
@@ -408,6 +482,7 @@ export function EmployeesView({
                   vm.totalPages ||
                   vm.isFetching
                 }
+                data-tooltip={vm.page === vm.totalPages ? "You are already on the last page" : vm.isFetching ? "Still loading, please wait" : undefined}
               >
                 Next
               </button>
@@ -440,11 +515,12 @@ export function EmployeesView({
 
             <input
               value={employeeId}
-              onChange={(event) =>
+              onChange={(event) => {
+                setEmployeeIdEdited(true);
                 setEmployeeId(
                   event.target.value
-                )
-              }
+                );
+              }}
               placeholder="Enter employee ID"
               disabled={isCreating}
               required
@@ -499,6 +575,7 @@ export function EmployeesView({
                 )
               }
               minLength={8}
+              placeholder="Minimum 8 characters"
               disabled={isCreating}
             />
           </label>
@@ -527,7 +604,7 @@ export function EmployeesView({
                 );
                 setRole("");
                 setRoleDescription("");
-                setPermissionIds([]);
+                setPermissionMatrix({});
               }}
               disabled={isCreating}
             />
@@ -546,7 +623,7 @@ export function EmployeesView({
                 setRoleMode("new");
                 setRole("");
                 setRoleDescription("");
-                setPermissionIds([]);
+                setPermissionMatrix({});
               }}
               disabled={isCreating}
             />
@@ -587,7 +664,7 @@ export function EmployeesView({
 
                   <PermissionMatrixEditor
                     value={
-                      selectedRole.permissionIds
+                      selectedRole.matrix
                     }
                     permissions={
                       vm.permissions
@@ -651,9 +728,9 @@ export function EmployeesView({
               </p>
 
               <PermissionMatrixEditor
-                value={permissionIds}
+                value={permissionMatrix}
                 permissions={vm.permissions}
-                onChange={setPermissionIds}
+                onChange={setPermissionMatrix}
                 disabled={isCreating}
               />
             </div>
@@ -683,6 +760,7 @@ export function EmployeesView({
               setShowCreate(false);
             }}
             disabled={isCreating}
+            data-tooltip={isCreating ? "Please wait, the employee is being created" : undefined}
           >
             Cancel
           </button>
@@ -691,16 +769,8 @@ export function EmployeesView({
             className="primary-button"
             type="button"
             onClick={submit}
-            disabled={
-              isCreating ||
-              !employeeId.trim() ||
-              !name.trim() ||
-              !email.trim() ||
-              password.length < 8 ||
-              !role.trim() ||
-              (roleMode === "new" &&
-                permissionIds.length === 0)
-            }
+            disabled={Boolean(createBlockedReason)}
+            data-tooltip={createBlockedReason}
           >
             {isCreating
               ? "Creating…"

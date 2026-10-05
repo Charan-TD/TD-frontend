@@ -5,6 +5,7 @@ import type { AdminProfile, Module, PortalSection, Screen } from "../models/port
 import type { NavigationSectionId } from "../models/navigation";
 import { navigationGroups, navigationSections, navigationSubsections } from "../models/navigation";
 import { missingPermissions } from "../models/access";
+import { noAccess } from "../models/disabledReason";
 import { useSidebarViewModel } from "../viewmodels/sidebarViewModel";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
@@ -30,8 +31,8 @@ type Props = {
  * aria-disabled (rather than the disabled attribute) is used so the tooltip
  * and cursor still work on a blocked button.
  */
-function QuickAction({ label, icon, missing, enabledTitle, attention = false, primary = false, onRun }: {
-  label: string; icon: Parameters<typeof Icon>[0]["name"]; missing: string[]; enabledTitle: string;
+function QuickAction({ label, task, icon, missing, enabledTitle, attention = false, primary = false, onRun }: {
+  label: string; task: string; icon: Parameters<typeof Icon>[0]["name"]; missing: string[]; enabledTitle: string;
   attention?: boolean; primary?: boolean; onRun: () => void;
 }) {
   const blocked = missing.length > 0;
@@ -41,7 +42,9 @@ function QuickAction({ label, icon, missing, enabledTitle, attention = false, pr
       type="button"
       className={`topbar-action-link${primary ? " topbar-action-link--primary" : ""}${blocked ? " is-disabled" : ""}`}
       aria-disabled={blocked}
-      title={blocked ? `${label} is not available - you need the ${missing.join(" + ")} permission` : enabledTitle}
+      data-tooltip={blocked ? noAccess(task) : enabledTitle}
+      data-tooltip-kind={blocked ? "access" : undefined}
+      data-tooltip-icon={blocked ? undefined : icon}
       onClick={() => { if (!blocked) onRun(); }}
     >
       {!blocked && attention && <span className="topbar-action-blink" aria-hidden="true" />}
@@ -51,6 +54,7 @@ function QuickAction({ label, icon, missing, enabledTitle, attention = false, pr
 }
 
 const screenToSection: Partial<Record<Screen, NavigationSectionId>> = { dashboard: "dashboard", management: "users", employees: "employees", "employee-details": "employees", "assign-role": "employees", "employee-activity": "employees" };
+const screenToEmployeeSubsection: Partial<Record<Screen, string>> = { employees: "employees-all", "employee-details": "employees-all", "assign-role": "employees-roles", "employee-activity": "employees-activity" };
 
 export function AppShell({ title, subtitle, screen, admin, noticeOpen, managementServices, selectedManagementId, managementOpen, selectedSubsection, onNavigate, onSelectManagement, onToggleManagement, onToggleNotice, onQuickAddEmployee, children }: Props) {
   const sidebarVm = useSidebarViewModel(screenToSection[screen] ?? "dashboard");
@@ -90,6 +94,10 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, managemen
     const target = screenToSection[screen] ?? "dashboard";
     if (sidebarVm.selectedSection !== target && allowed.has(target)) sidebarVm.selectSection(target);
   }, [screen, sidebarVm.selectedSection]);
+
+  // Employee pages are separate screens rather than management subsections,
+  // so their highlighted submenu item follows the current screen.
+  const activeSubsection = screenToEmployeeSubsection[screen] ?? selectedSubsection;
 
   const navigateSection = (section: NavigationSectionId) => {
     if (!allowed.has(section)) return;
@@ -199,7 +207,7 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, managemen
                       <div className="context-sidebar-list">
                         {submenu.map((subItem) => (
                           <div key={subItem.id}>
-                            <button type="button" className={selectedSubsection === subItem.id ? "is-selected" : ""} onClick={() => navigateSubsection(subItem)}>
+                            <button type="button" className={activeSubsection === subItem.id ? "is-selected" : ""} onClick={() => navigateSubsection(subItem)}>
                               <Icon name={subItem.icon} size={13} /><span>{subItem.label}</span>
                             </button>
                           </div>
@@ -243,13 +251,13 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, managemen
 
         <div className="topbar-actions">
           <div className="topbar-action-links" aria-label="Quick actions">
-            <QuickAction label="Add Employee" icon="users" missing={missingAddEmployee} attention={unassignedEmployeesCount > 0} onRun={onQuickAddEmployee}
-              enabledTitle={unassignedEmployeesCount > 0 ? `Add employee (${unassignedEmployeesCount} without a role)` : "Add employee"} />
-            <QuickAction label="Approve Restaurants" icon="store" missing={missingApproveRestaurants} attention={pendingRestaurantsCount > 0} onRun={() => navigateManagementShortcut("restaurants", "restaurants-approvals")}
-              enabledTitle={pendingRestaurantsCount > 0 ? `Approve restaurants (${pendingRestaurantsCount} pending)` : "Approve restaurants"} />
-            <QuickAction label="Approve Riders" icon="rider" missing={missingApproveRiders} attention={pendingRidersCount > 0} onRun={() => navigateManagementShortcut("riders", "riders-approvals")}
-              enabledTitle={pendingRidersCount > 0 ? `Approve riders (${pendingRidersCount} pending)` : "Approve riders"} />
-            <QuickAction label="Create Offer" icon="megaphone" primary missing={missingCreateOffer} onRun={() => navigateManagementShortcut("marketing", "marketing-offers")} enabledTitle="Create offer" />
+            <QuickAction label="Add Employee" task="add employees" icon="users" missing={missingAddEmployee} attention={unassignedEmployeesCount > 0} onRun={onQuickAddEmployee}
+              enabledTitle={unassignedEmployeesCount > 0 ? `Add a new employee. ${unassignedEmployeesCount} ${unassignedEmployeesCount === 1 ? "employee still needs" : "employees still need"} a role.` : "Add a new employee"} />
+            <QuickAction label="Approve Restaurants" task="approve restaurants" icon="store" missing={missingApproveRestaurants} attention={pendingRestaurantsCount > 0} onRun={() => navigateManagementShortcut("restaurants", "restaurants-approvals")}
+              enabledTitle={pendingRestaurantsCount > 0 ? `${pendingRestaurantsCount} ${pendingRestaurantsCount === 1 ? "restaurant is" : "restaurants are"} waiting for approval` : "No restaurants are waiting for approval"} />
+            <QuickAction label="Approve Riders" task="approve riders" icon="rider" missing={missingApproveRiders} attention={pendingRidersCount > 0} onRun={() => navigateManagementShortcut("riders", "riders-approvals")}
+              enabledTitle={pendingRidersCount > 0 ? `${pendingRidersCount} ${pendingRidersCount === 1 ? "rider is" : "riders are"} waiting for approval` : "No riders are waiting for approval"} />
+            <QuickAction label="Create Offer" task="create offers" icon="megaphone" primary missing={missingCreateOffer} onRun={() => navigateManagementShortcut("marketing", "marketing-offers")} enabledTitle="Create a new offer for customers" />
           </div>
 
           <div className="notification-wrap"><button className="icon-button" type="button" aria-label="Notifications" onClick={onToggleNotice}><Icon name="bell" /><span className="notification-dot" /></button>{noticeOpen && <div className="notification-popover"><strong>3 items need attention</strong><span>Approvals and complaints are waiting for review.</span></div>}</div>

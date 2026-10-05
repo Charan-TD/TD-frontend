@@ -1,6 +1,7 @@
 "use client";
 
 import { AppShell } from "./components/AppShell";
+import { can } from "./models/access";
 import { DashboardView } from "./views/DashboardView";
 import { EditProfileView } from "./views/EditProfileView";
 import { LoginView } from "./views/LoginView";
@@ -38,14 +39,14 @@ export function App() {
   };
 
   if (vm.screen === "employees") return <AppShell title={pageCopy.employees.title} subtitle={pageCopy.employees.subtitle} {...shellProps}>{<EmployeesView permissions={vm.admin.permissions} onOpenDetails={vm.selectEmployee} onManageRoles={() => vm.navigate("assign-role")} autoOpenCreate={vm.pendingAction === "add-employee"} onAutoOpenHandled={vm.clearPendingAction} />}</AppShell>;
-  if (vm.screen === "employee-details" && vm.selectedEmployeeId) return <AppShell title={pageCopy["employee-details"].title} subtitle={pageCopy["employee-details"].subtitle} {...shellProps}>{<EmployeeDetailsView employeeId={vm.selectedEmployeeId} onBack={() => vm.navigate("employees")} onAssignRole={() => vm.navigate("assign-role")} />}</AppShell>;
+  if (vm.screen === "employee-details" && vm.selectedEmployeeId) return <AppShell title={pageCopy["employee-details"].title} subtitle={pageCopy["employee-details"].subtitle} {...shellProps}>{<EmployeeDetailsView employeeId={vm.selectedEmployeeId} permissions={vm.admin.permissions} onBack={() => vm.navigate("employees")} onAssignRole={() => vm.navigate("assign-role")} />}</AppShell>;
   if (vm.screen === "employee-activity") return <AppShell title={pageCopy["employee-activity"].title} subtitle={pageCopy["employee-activity"].subtitle} {...shellProps}>{<EmployeeActivityView onBack={() => vm.navigate("employees")} />}</AppShell>;
   if (vm.screen === "assign-role") return <AppShell title={pageCopy["assign-role"].title} subtitle={pageCopy["assign-role"].subtitle} {...shellProps}>{<AssignRoleView permissions={vm.admin.permissions} onBack={() => vm.navigate("employees")} />}</AppShell>;
 
   const copy = pageCopy[vm.screen];
   return <AppShell title={copy.title} subtitle={copy.subtitle} {...shellProps}>
     {vm.screen === "dashboard" && <DashboardView metrics={vm.data.metrics} activities={vm.data.activities} access={vm.admin.access} onNavigateManagement={() => vm.navigate("management")} />}
-    {vm.screen === "management" && <ManagementView modules={vm.data.modules} userActivities={vm.data.userActivities} selectedServiceId={vm.selectedManagementId} selectedSubsection={vm.selectedSubsection} onSelectService={vm.selectManagementService} />}
+    {vm.screen === "management" && <ManagementView modules={vm.data.modules} userActivities={vm.data.userActivities} selectedServiceId={vm.selectedManagementId} selectedSubsection={vm.selectedSubsection} onSelectService={vm.selectManagementService} canUpdateUsers={can(vm.admin.permissions, "users", "update")} />}
     {vm.screen === "profile" && <ProfileView admin={vm.admin} onEdit={() => vm.navigate("edit-profile")} />}
   </AppShell>;
 }

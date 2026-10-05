@@ -10,6 +10,7 @@ import {
   useCreatePermissionMutation,
   useCreateRoleMutation,
   useUpdateRoleMutation,
+  useDeleteRoleMutation,
   useGetPermissionsQuery,
   useGetRolesQuery,
 } from "../api/rolesApi";
@@ -24,30 +25,26 @@ type AssignRoleViewModelProps = {
 };
 
 
-const ALL_ROLE_ACTIONS = ["read", "insert", "update", "delete"] as const;
-
-function buildRolePermissionPayload(
-  permissionIds: string[],
+export function buildRolePermissionPayload(
+  matrix: PermissionMatrix,
   availablePermissions: Array<{ id: string; permission_name: string }>,
-  matrix: PermissionMatrix = {},
 ) {
-  const byId = new Map(availablePermissions.map((permission) => [permission.id, permission]));
+  const byResource = new Map(
+    availablePermissions.map((permission) => [
+      permission.permission_name.trim().toLowerCase(),
+      permission,
+    ]),
+  );
 
-  return Array.from(new Set(permissionIds)).flatMap((permissionId) => {
-    const permission = byId.get(permissionId);
+  return Object.entries(matrix).flatMap(([resource, actions]) => {
+    if (!actions || actions.length === 0) return [];
+    const permission = byResource.get(resource.trim().toLowerCase());
     if (!permission) return [];
-
-    const resource = permission.permission_name.trim().toLowerCase();
-    const configured = matrix[resource as keyof PermissionMatrix];
-    const actions = configured && configured.length > 0
-      ? configured
-      : [...ALL_ROLE_ACTIONS];
-
-    return [{ permissionId, actions }];
+    return [{ permissionId: permission.id, actions }];
   });
 }
 
-function getErrorMessage(error: unknown): string {
+export function getErrorMessage(error: unknown): string {
   if (typeof error === "string") {
     return error;
   }
@@ -133,6 +130,9 @@ export function useAssignRoleViewModel(
   const [updateRoleMutation, { isLoading: isUpdatingRole }] =
     useUpdateRoleMutation();
 
+  const [deleteRoleMutation, { isLoading: isDeletingRole }] =
+    useDeleteRoleMutation();
+
   const [createPermissionMutation, { isLoading: isCreatingPermission }] =
     useCreatePermissionMutation();
 
@@ -213,7 +213,6 @@ export function useAssignRoleViewModel(
   const createRole = async (
     name: string,
     description: string,
-    permissionIds: string[],
     permissionCode: PermissionMatrix
   ) => {
     setSavedMessage("");
@@ -224,8 +223,8 @@ export function useAssignRoleViewModel(
       return null;
     }
 
-    if (permissionIds.length === 0) {
-      setErrorMessage("Please select at least one permission.");
+    if (Object.values(permissionCode).every((actions) => !actions || actions.length === 0)) {
+      setErrorMessage("Please select at least one permission action.");
       return null;
     }
 
@@ -233,7 +232,7 @@ export function useAssignRoleViewModel(
       const role = await createRoleMutation({
         name: name.trim(),
         description: description.trim(),
-        permissions: buildRolePermissionPayload(permissionIds, permissions, permissionCode),
+        permissions: buildRolePermissionPayload(permissionCode, permissions),
       }).unwrap();
 
       setRoleName(role.name);
@@ -250,7 +249,7 @@ export function useAssignRoleViewModel(
     id: string,
     name: string,
     description: string,
-    permissionIds: string[],
+    permissionCode: PermissionMatrix,
   ) => {
     setSavedMessage("");
     setErrorMessage("");
@@ -261,9 +260,8 @@ export function useAssignRoleViewModel(
         name: name.trim(),
         description: description.trim(),
         permissions: buildRolePermissionPayload(
-          permissionIds,
+          permissionCode,
           permissions,
-          selectedRole?.matrix ?? {},
         ),
       }).unwrap();
       setRoleName(role.name);
@@ -272,6 +270,21 @@ export function useAssignRoleViewModel(
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
       return null;
+    }
+  };
+
+  const deleteRole = async (id: string) => {
+    setSavedMessage("");
+    setErrorMessage("");
+
+    try {
+      await deleteRoleMutation({ id }).unwrap();
+      setRoleName("");
+      setSavedMessage("Role deleted successfully.");
+      return true;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      return false;
     }
   };
 
@@ -324,6 +337,7 @@ export function useAssignRoleViewModel(
     isSaving,
     isCreatingRole,
     isUpdatingRole,
+    isDeletingRole,
     isCreatingPermission,
 
     isLoading:
@@ -349,6 +363,7 @@ export function useAssignRoleViewModel(
     save,
     createRole,
     updateRole,
+    deleteRole,
     createPermission,
   };
 }

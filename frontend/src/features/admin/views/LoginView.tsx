@@ -110,6 +110,7 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
                   }
                   onClick={vm.togglePasswordVisibility}
                   disabled={vm.isSubmitting}
+                  data-tooltip={vm.isSubmitting ? "Please wait, signing in" : undefined}
                 >
                   <Icon
                     name={vm.passwordVisible ? "eye-off" : "eye"}
@@ -140,6 +141,7 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
               className="primary-button primary-button--full"
               type="submit"
               disabled={vm.isSubmitting}
+              data-tooltip={vm.isSubmitting ? "Please wait, signing in" : undefined}
             >
               <span>
                 {vm.isSubmitting

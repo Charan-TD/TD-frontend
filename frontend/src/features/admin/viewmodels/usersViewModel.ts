@@ -17,6 +17,11 @@ export type UserWorkspace =
 
 const PAGE_SIZE = 10;
 
+export function isUserBlocked(user: CustomerUser): boolean {
+  const status = String(user.status).toLowerCase();
+  return status === "inactive" || status === "blocked";
+}
+
 export function useUsersViewModel(
   workspace: UserWorkspace = "all"
 ) {
@@ -71,16 +76,33 @@ export function useUsersViewModel(
     }
   };
 
-  const toggleBlock = async (user: CustomerUser) => {
-    const nextStatus =
-      String(user.status).toLowerCase() === "blocked"
-        ? "active"
-        : "blocked";
+  const [errorMessage, setErrorMessage] = useState("");
 
-    await updateStatus({
-      id: user.id,
-      status: nextStatus,
-    }).unwrap();
+  const toggleBlock = async (user: CustomerUser) => {
+    setErrorMessage("");
+
+    // Backend customer statuses are ACTIVE / INACTIVE ("blocked" = INACTIVE).
+    const nextStatus = isUserBlocked(user) ? "active" : "inactive";
+
+    try {
+      const updated = await updateStatus({
+        id: user.id,
+        status: nextStatus,
+      }).unwrap();
+
+      setSelectedUser((current) =>
+        current?.id === user.id
+          ? { ...current, ...updated, status: updated?.status ?? nextStatus.toUpperCase() }
+          : current
+      );
+    } catch (error) {
+      const data = (error as { data?: { message?: unknown } })?.data;
+      setErrorMessage(
+        typeof data?.message === "string"
+          ? data.message
+          : "Unable to update user status. Please try again."
+      );
+    }
   };
 
   return {
@@ -100,6 +122,7 @@ export function useUsersViewModel(
     goToPreviousPage,
 
     toggleBlock,
+    errorMessage,
 
     isLoading: query.isLoading,
     isFetching: query.isFetching,

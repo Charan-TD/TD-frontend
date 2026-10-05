@@ -30,32 +30,27 @@ type CreateEmployeeFormInput = {
   roleMode: "existing" | "new";
   roleName: string;
   roleDescription?: string;
-  permissionIds?: string[];
   permissionCode?: PermissionMatrix;
 };
 
 const PAGE_SIZE = 8;
 
-const ALL_ROLE_ACTIONS = ["read", "insert", "update", "delete"] as const;
-
 function buildRolePermissionPayload(
-  permissionIds: string[],
+  matrix: PermissionMatrix,
   availablePermissions: Array<{ id: string; permission_name: string }>,
-  matrix: PermissionMatrix = {},
 ) {
-  const byId = new Map(availablePermissions.map((permission) => [permission.id, permission]));
+  const byResource = new Map(
+    availablePermissions.map((permission) => [
+      permission.permission_name.trim().toLowerCase(),
+      permission,
+    ]),
+  );
 
-  return Array.from(new Set(permissionIds)).flatMap((permissionId) => {
-    const permission = byId.get(permissionId);
+  return Object.entries(matrix).flatMap(([resource, actions]) => {
+    if (!actions || actions.length === 0) return [];
+    const permission = byResource.get(resource.trim().toLowerCase());
     if (!permission) return [];
-
-    const resource = permission.permission_name.trim().toLowerCase();
-    const configured = matrix[resource as keyof PermissionMatrix];
-    const actions = configured && configured.length > 0
-      ? configured
-      : [...ALL_ROLE_ACTIONS];
-
-    return [{ permissionId, actions }];
+    return [{ permissionId: permission.id, actions }];
   });
 }
 
@@ -229,15 +224,15 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
 
         if (input.roleMode === "new") {
           if (
-            !input.permissionIds?.length
+            Object.values(input.permissionCode ?? {}).every(
+              (actions) => !actions || actions.length === 0
+            )
           ) {
             setErrorMessage(
-              "Select at least one permission for the new role."
+              "Select at least one permission action for the new role."
             );
 
-            return {
-              success: false,
-            };
+            return { success: false };
           }
 
           const createdRole =
@@ -246,9 +241,8 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
               description:
                 input.roleDescription ?? "",
               permissions: buildRolePermissionPayload(
-                input.permissionIds,
-                permissions,
                 input.permissionCode ?? {},
+                permissions,
               ),
             }).unwrap();
 

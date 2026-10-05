@@ -4,338 +4,135 @@ import { useMemo, useState } from "react";
 
 import { Icon } from "../../admin/components/Icon";
 import { SidePanel } from "../../admin/components/SidePanel";
-
 import {
   PORTAL_SECTIONS,
   type AdminPermissionCode,
   type DbPermission,
+  type PermissionMatrix,
 } from "../models/employee";
 
-import {
-  getPermissionLabel,
-  getPermissionOperation,
-  getPermissionSection,
-} from "../models/permissions";
-
-type CreatePermissionResult = {
-  success: boolean;
-  permission?: DbPermission;
-};
+const STANDARD_OPERATIONS: Array<{ key: AdminPermissionCode; label: string }> = [
+  { key: "read", label: "Read" },
+  { key: "insert", label: "Insert" },
+  { key: "update", label: "Update" },
+  { key: "delete", label: "Delete" },
+];
 
 type Props = {
-  value: string[];
+  value: PermissionMatrix;
   permissions: DbPermission[];
-  onChange: (permissionIds: string[]) => void;
+  onChange: (matrix: PermissionMatrix) => void;
   disabled?: boolean;
-  /**
-   * Lets the admin add a permission that is not already listed
-   * (a missing standard operation for a section, or a fully
-   * custom permission name).
-   */
-  onCreatePermission?: (permissionName: string) => Promise<CreatePermissionResult>;
-  isCreatingPermission?: boolean;
 };
 
-/**
- * The four standard operations every section can be granted.
- * The last one is spelled "insert" (rather than "create") to
- * match the naming the admin uses for this permission type.
- */
-const STANDARD_OPERATIONS: Array<{
-  key: AdminPermissionCode;
-  label: string;
-}> = [
-    { key: "read", label: "Read" },
-    { key: "insert", label: "Insert" },
-    { key: "update", label: "Update" },
-    { key: "delete", label: "Delete" },
-  ];
+function titleizeResource(resource: string) {
+  return resource
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export function PermissionMatrixEditor({
   value,
   permissions,
   onChange,
   disabled = false,
-  onCreatePermission,
-  isCreatingPermission = false,
 }: Props) {
-  const [open, setOpen] =
-    useState(false);
+  const [open, setOpen] = useState(false);
 
-  const [
-    customInputs,
-    setCustomInputs,
-  ] = useState<Record<string, string>>({});
+  const rows = useMemo(() => {
+    const portalMeta = new Map(PORTAL_SECTIONS.map((item) => [item.id, item]));
+    const portalOrder = new Map(PORTAL_SECTIONS.map((item, index) => [item.id, index]));
 
-  const [
-    pendingKey,
-    setPendingKey,
-  ] = useState<string | null>(null);
+    return permissions
+      .map((permission) => {
+        const resource = permission.permission_name.trim().toLowerCase();
+        const meta = portalMeta.get(resource as (typeof PORTAL_SECTIONS)[number]["id"]);
 
-  const [
-    createError,
-    setCreateError,
-  ] = useState("");
+        return {
+          permission,
+          resource,
+          label: meta?.label ?? titleizeResource(resource),
+          description:
+            meta?.description ?? `Manage ${titleizeResource(resource).toLowerCase()} permissions`,
+          order: portalOrder.get(resource as (typeof PORTAL_SECTIONS)[number]["id"]) ?? 1000,
+        };
+      })
+      .filter((row) => row.resource.length > 0)
+      .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+  }, [permissions]);
 
-  const selected = new Set(value);
+  const selectedResources = Object.entries(value).filter(
+    (entry): entry is [string, AdminPermissionCode[]] => Array.isArray(entry[1]) && entry[1].length > 0,
+  );
+  const selectedActionCount = selectedResources.reduce((sum, [, actions]) => sum + actions.length, 0);
 
-  const knownSectionIds =
-    PORTAL_SECTIONS.map(
-      (item) => item.id
-    );
+  const toggleAction = (resource: string, action: AdminPermissionCode) => {
+    if (disabled) return;
 
-  const groupedPermissions =
-    useMemo(() => {
-      const groups =
-        new Map<
-          string,
-          DbPermission[]
-        >();
+    const existing = value[resource] ?? [];
+    const nextActions = existing.includes(action)
+      ? existing.filter((item) => item !== action)
+      : [...existing, action];
 
-      permissions.forEach(
-        (permission) => {
-          const section =
-            getPermissionSection(
-              permission.permission_name,
-              knownSectionIds
-            );
-
-          const groupName =
-            section ?? "other";
-
-          const current =
-            groups.get(
-              groupName
-            ) ?? [];
-
-          groups.set(
-            groupName,
-            [
-              ...current,
-              permission,
-            ]
-          );
-        }
-      );
-
-      return groups;
-    }, [permissions]);
-
-  // Every portal section gets its own row, even when it has no
-  // permissions configured yet, so the admin can add its first one.
-  const sectionRows = PORTAL_SECTIONS.map((section) => ({
-    section,
-    sectionPermissions: groupedPermissions.get(section.id) ?? [],
-  }));
-
-  const otherPermissions = groupedPermissions.get("other") ?? [];
-
-  const togglePermission = (
-    permissionId: string
-  ) => {
-    const next = new Set(
-      selected
-    );
-
-    if (
-      next.has(permissionId)
-    ) {
-      next.delete(
-        permissionId
-      );
+    const next: PermissionMatrix = { ...value };
+    if (nextActions.length === 0) {
+      delete next[resource];
     } else {
-      next.add(
-        permissionId
-      );
+      next[resource] = nextActions;
     }
 
-    onChange(
-      Array.from(next)
-    );
+    onChange(next);
   };
 
-  const toggleSelectAllForSection = (
-    sectionPermissions: DbPermission[]
-  ) => {
-    const standardPermissionIds =
-      sectionPermissions
-        .filter((permission) => {
-          const operation =
-            getPermissionOperation(
-              permission.permission_name
-            );
+  const toggleAllForResource = (resource: string) => {
+    if (disabled) return;
 
-          return STANDARD_OPERATIONS.some(
-            (item) =>
-              item.key === operation
-          );
-        })
-        .map(
-          (permission) =>
-            permission.id
-        );
-
-    if (
-      standardPermissionIds.length === 0
-    ) {
-      return;
-    }
-
-    const allSelected =
-      standardPermissionIds.every(
-        (permissionId) =>
-          selected.has(permissionId)
-      );
-
-    const next = new Set(
-      selected
-    );
+    const current = value[resource] ?? [];
+    const allSelected = STANDARD_OPERATIONS.every((operation) => current.includes(operation.key));
+    const next: PermissionMatrix = { ...value };
 
     if (allSelected) {
-      standardPermissionIds.forEach(
-        (permissionId) =>
-          next.delete(permissionId)
-      );
+      delete next[resource];
     } else {
-      standardPermissionIds.forEach(
-        (permissionId) =>
-          next.add(permissionId)
-      );
+      next[resource] = STANDARD_OPERATIONS.map((operation) => operation.key);
     }
 
-    onChange(
-      Array.from(next)
-    );
-  };
-
-  const isSectionSelectAllChecked = (
-    sectionPermissions: DbPermission[]
-  ) => {
-    const standardPermissionIds =
-      sectionPermissions
-        .filter((permission) => {
-          const operation =
-            getPermissionOperation(
-              permission.permission_name
-            );
-
-          return STANDARD_OPERATIONS.some(
-            (item) =>
-              item.key === operation
-          );
-        })
-        .map(
-          (permission) =>
-            permission.id
-        );
-
-    return (
-      standardPermissionIds.length > 0 &&
-      standardPermissionIds.every(
-        (permissionId) =>
-          selected.has(permissionId)
-      )
-    );
+    onChange(next);
   };
 
   const clearAll = () => {
-    onChange([]);
-  };
-
-  const addAndSelectPermission = async (permissionName: string, pendingId: string) => {
-    if (!onCreatePermission || disabled) return;
-
-    setCreateError("");
-    setPendingKey(pendingId);
-
-    const result = await onCreatePermission(permissionName);
-
-    setPendingKey(null);
-
-    if (!result.success || !result.permission) {
-      setCreateError(`Could not add "${permissionName}".`);
-      return;
-    }
-
-    const next = new Set(selected);
-    next.add(result.permission.id);
-    onChange(Array.from(next));
-  };
-
-  const handleQuickAdd = (sectionId: string, operationKey: string) => {
-    const permissionName = `${sectionId}_${operationKey}`;
-    void addAndSelectPermission(permissionName, permissionName);
-  };
-
-  const handleCustomAdd = (groupKey: string, prefix?: string) => {
-    const raw = (customInputs[groupKey] ?? "").trim();
-    if (!raw) return;
-
-    const permissionName = prefix && !raw.toLowerCase().startsWith(`${prefix}_`) ? `${prefix}_${raw}` : raw;
-
-    void addAndSelectPermission(permissionName, `custom-${groupKey}`).then(() => {
-      setCustomInputs((current) => ({ ...current, [groupKey]: "" }));
-    });
+    if (!disabled) onChange({});
   };
 
   return (
     <div className="access-selector">
       <div className="access-selector-header">
         <div>
-          <strong>
-            Permissions
-          </strong>
-
-          <p>
-            Select backend resource permissions.
-            The API stores actions separately
-            on the role.
-          </p>
+          <strong>Permissions</strong>
+          <p>Select a backend resource and the exact actions this role can perform.</p>
         </div>
-
-        <span>
-          {value.length} selected
-        </span>
+        <span>{selectedResources.length} resources · {selectedActionCount} actions</span>
       </div>
 
       <div className="access-selector-summary">
         <div className="access-pills">
-          {value.length === 0 && (
-            <span className="access-pills-empty">
-              No permissions selected
-            </span>
+          {selectedResources.length === 0 && (
+            <span className="access-pills-empty">No permissions selected</span>
           )}
-
-          {permissions
-            .filter((permission) =>
-              selected.has(
-                permission.id
-              )
-            )
-            .map((permission) => (
-              <span
-                key={permission.id}
-              >
-                {getPermissionLabel(
-                  permission.permission_name
-                )}
-              </span>
-            ))}
+          {selectedResources.map(([resource, actions]) => (
+            <span key={resource}>
+              {titleizeResource(resource)}: {actions.join(", ")}
+            </span>
+          ))}
         </div>
 
         <button
           type="button"
           className="secondary-button"
-          disabled={disabled}
-          onClick={() =>
-            setOpen(true)
-          }
+          onClick={() => setOpen(true)}
         >
-          <Icon
-            name="settings"
-            size={14}
-          />
-          Configure permissions
+          <Icon name="settings" size={14} />
+          {disabled ? "View permissions" : "Configure permissions"}
         </button>
       </div>
 
@@ -344,7 +141,7 @@ export function PermissionMatrixEditor({
         onClose={() => setOpen(false)}
         eyebrow="PERMISSIONS"
         title="Configure permissions"
-        description="Choose the backend resources assigned to this role. Resource names come from the permissions table; action authorization is enforced by the backend role permission matrix."
+        description="Choose resource-level actions exactly as the backend expects: read, insert, update and delete."
         elevated
         widthVariant="wide"
         footer={
@@ -354,260 +151,69 @@ export function PermissionMatrixEditor({
         }
       >
         <div className="matrix-toolbar">
-          <span>
-            {value.length} of{" "}
-            {permissions.length}{" "}
-            permissions selected
-          </span>
-
-          <button
-            type="button"
-            className="text-button"
-            disabled={disabled}
-            onClick={clearAll}
-          >
-            Clear all
-          </button>
+          <span>{selectedResources.length} of {rows.length} resources selected</span>
+          {!disabled && (
+            <button type="button" className="text-button" onClick={clearAll}>
+              Clear all
+            </button>
+          )}
         </div>
 
-        {createError && (
-          <div className="api-state api-state--error">{createError}</div>
-        )}
-
         <div className="matrix-grid matrix-grid--accordion">
-          {sectionRows.map(({ section, sectionPermissions }) => {
-            const existingOperationKeys = new Set(
-              sectionPermissions
-                .map((permission) =>
-                  getPermissionOperation(permission.permission_name)
-                )
-                .filter(Boolean)
+          {rows.map(({ permission, resource, label, description }) => {
+            const current = value[resource] ?? [];
+            const allSelected = STANDARD_OPERATIONS.every((operation) =>
+              current.includes(operation.key),
             );
-
-            const missingOperations = STANDARD_OPERATIONS.filter(
-              (operation) => !existingOperationKeys.has(operation.key)
-            );
-
-            const hasStandardPermissions =
-              sectionPermissions.some((permission) => {
-                const operation =
-                  getPermissionOperation(
-                    permission.permission_name
-                  );
-
-                return STANDARD_OPERATIONS.some(
-                  (item) =>
-                    item.key === operation
-                );
-              });
 
             return (
-              <article
-                key={section.id}
-                className="matrix-row"
-              >
+              <article key={permission.id} className="matrix-row">
                 <div className="matrix-row-top">
                   <div className="matrix-section">
                     <span>
-                      <strong>
-                        {section.label}
-                      </strong>
-
-                      <small>
-                        {section.description}
-                      </small>
+                      <strong>{label}</strong>
+                      <small>{description}</small>
                     </span>
                   </div>
 
-                  {hasStandardPermissions && (
-                    <label className="matrix-select-all">
-                      <input
-                        type="checkbox"
-                        checked={isSectionSelectAllChecked(
-                          sectionPermissions
-                        )}
-                        disabled={disabled}
-                        onChange={() =>
-                          toggleSelectAllForSection(
-                            sectionPermissions
-                          )
-                        }
-                      />
-
-                      <span>
-                        Select All
-                      </span>
-                    </label>
-                  )}
+                  <label className="matrix-select-all">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      disabled={disabled}
+                      onChange={() => toggleAllForResource(resource)}
+                    />
+                    <span>Select All</span>
+                  </label>
                 </div>
 
                 <div className="matrix-operations-collapse is-open">
                   <div className="matrix-operations">
-                    {sectionPermissions.length === 0 && (
-                      <span className="matrix-operations-empty">No permissions yet for this section.</span>
-                    )}
-
-                    {sectionPermissions.map(
-                      (permission) => {
-                        const checked =
-                          selected.has(
-                            permission.id
-                          );
-
-                        return (
-                          <label
-                            key={
-                              permission.id
-                            }
-                            className={`matrix-op ${checked
-                              ? "is-checked"
-                              : ""
-                              }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={
-                                checked
-                              }
-                              disabled={
-                                disabled
-                              }
-                              onChange={() =>
-                                togglePermission(
-                                  permission.id
-                                )
-                              }
-                            />
-
-                            <span>
-                              {getPermissionLabel(
-                                permission.permission_name
-                              )}
-                            </span>
-                          </label>
-                        );
-                      }
-                    )}
-
-                    {!disabled && onCreatePermission && missingOperations.map((operation) => {
-                      const permissionName = `${section.id}_${operation.key}`;
-                      const isPending = pendingKey === permissionName;
-
+                    {STANDARD_OPERATIONS.map((operation) => {
+                      const checked = current.includes(operation.key);
                       return (
-                        <button
+                        <label
                           key={operation.key}
-                          type="button"
-                          className="matrix-op matrix-op--add"
-                          onClick={() => handleQuickAdd(section.id, operation.key)}
-                          disabled={isPending}
+                          className={`matrix-op ${checked ? "is-checked" : ""}`}
                         >
-                          <Icon name="plus" size={11} />
-                          <span>{isPending ? "Adding…" : operation.label}</span>
-                        </button>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() => toggleAction(resource, operation.key)}
+                          />
+                          <span>{operation.label}</span>
+                        </label>
                       );
                     })}
                   </div>
-
-                  {!disabled && onCreatePermission && (
-                    <div className="matrix-add-custom">
-                      <input
-                        value={customInputs[section.id] ?? ""}
-                        onChange={(event) =>
-                          setCustomInputs((current) => ({ ...current, [section.id]: event.target.value }))
-                        }
-                        placeholder="Custom permission (e.g. approve, assign)"
-                        aria-label={`Add a custom permission for ${section.label}`}
-                      />
-
-                      <button
-                        type="button"
-                        className="text-button"
-                        disabled={!customInputs[section.id]?.trim() || pendingKey === `custom-${section.id}`}
-                        onClick={() => handleCustomAdd(section.id, section.id)}
-                      >
-                        {pendingKey === `custom-${section.id}` ? "Adding…" : "+ Add"}
-                      </button>
-                    </div>
-                  )}
                 </div>
               </article>
             );
           })}
 
-          {otherPermissions.length > 0 && (
-            <article className="matrix-row">
-              <div className="matrix-row-top">
-                <div className="matrix-section">
-                  <span>
-                    <strong>
-                      Other Permissions
-                    </strong>
-                  </span>
-                </div>
-              </div>
-
-              <div className="matrix-operations-collapse is-open">
-                <div className="matrix-operations">
-                  {otherPermissions.map((permission) => {
-                    const checked = selected.has(permission.id);
-
-                    return (
-                      <label
-                        key={permission.id}
-                        className={`matrix-op ${checked ? "is-checked" : ""}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={() => togglePermission(permission.id)}
-                        />
-
-                        <span>{getPermissionLabel(permission.permission_name)}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </article>
-          )}
-
-          {!onCreatePermission && !permissions.length && (
-            <div className="api-state">
-              No permissions are configured
-              in the database.
-            </div>
-          )}
-
-          {!disabled && onCreatePermission && (
-            <article className="matrix-row matrix-row--custom">
-              <div className="matrix-row-top">
-                <div className="matrix-section">
-                  <span>
-                    <strong>Add a fully custom permission</strong>
-                    <small>Not tied to the sections above (e.g. a one-off permission name).</small>
-                  </span>
-                </div>
-              </div>
-
-              <div className="matrix-add-custom">
-                <input
-                  value={customInputs.custom ?? ""}
-                  onChange={(event) => setCustomInputs((current) => ({ ...current, custom: event.target.value }))}
-                  placeholder="e.g. reports_export"
-                  aria-label="Add a custom permission name"
-                />
-
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={!customInputs.custom?.trim() || pendingKey === "custom-custom"}
-                  onClick={() => handleCustomAdd("custom")}
-                >
-                  {pendingKey === "custom-custom" ? "Adding…" : "+ Add"}
-                </button>
-              </div>
-            </article>
+          {rows.length === 0 && (
+            <div className="api-state">No permission resources were returned by the backend.</div>
           )}
         </div>
       </SidePanel>

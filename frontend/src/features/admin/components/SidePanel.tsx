@@ -65,7 +65,7 @@ export function SidePanel({
                         {description && <p>{description}</p>}
                     </div>
 
-                    <button type="button" className="icon-close" onClick={onClose} aria-label="Close" disabled={closeDisabled}>
+                    <button type="button" className="icon-close" onClick={onClose} aria-label="Close" disabled={closeDisabled} data-tooltip={closeDisabled ? "Please wait, changes are being saved" : undefined}>
                         ×
                     </button>
                 </div>

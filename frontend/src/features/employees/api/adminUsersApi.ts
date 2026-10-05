@@ -6,6 +6,7 @@ import type {
   DbPermission,
   DbRole,
   Employee,
+  EmployeeRoleSummary,
   EmployeeStatus,
 } from "../models/employee";
 import { grantedSections, normalizePermissionMatrix } from "../models/permissions";
@@ -51,12 +52,30 @@ function formatCreatedDate(value?: string | null): string {
   });
 }
 
+type EmployeeAssignment = EmployeeRoleListResponse["employeeRoles"][number];
+type RoleWithPermissions = DbRole & { permissions?: DbPermission[] };
+
 function mapEmployee(
   employee: DbEmployee,
-  assignment?: EmployeeRoleListResponse["employeeRoles"][number],
-  role?: DbRole & { permissions?: DbPermission[] },
+  assignments: EmployeeAssignment[] = [],
+  roleMap: Map<string, RoleWithPermissions> = new Map(),
 ): Employee {
-  const permissions: DbPermission[] = role?.permissions ?? [];
+  const roles: EmployeeRoleSummary[] = assignments.map((assignment) => ({
+    assignmentId: assignment.id,
+    id: assignment.role_id,
+    name: assignment.role_name ?? roleMap.get(assignment.role_id)?.role_name ?? "Unknown role",
+    status: normalizeStatus(assignment.status),
+  }));
+
+  // Union of permissions from every active role, de-duplicated by id.
+  const permissionById = new Map<string, DbPermission>();
+  for (const assignment of assignments) {
+    if (normalizeStatus(assignment.status) === "Inactive") continue;
+    for (const permission of roleMap.get(assignment.role_id)?.permissions ?? []) {
+      permissionById.set(permission.id, permission);
+    }
+  }
+  const permissions = [...permissionById.values()];
   const access = normalizePermissionMatrix(permissions);
 
   return {
@@ -64,8 +83,10 @@ function mapEmployee(
     empId: employee.emp_id,
     name: employee.name,
     email: employee.email,
-    role: assignment?.role_name ?? role?.role_name ?? "Unassigned",
-    roleId: assignment?.role_id ?? role?.id,
+    role: roles.length ? roles.map((role) => role.name).join(", ") : "Unassigned",
+    roleId: roles[0]?.id,
+    roles,
+    roleIds: roles.map((role) => role.id),
     status: normalizeStatus(employee.status),
     permissionIds: permissions.map((permission) => permission.id),
     permissionNames: permissions.map((permission) => permission.permission_name),
@@ -77,7 +98,7 @@ function mapEmployee(
   };
 }
 
-async function loadRoles(baseQuery: any): Promise<Array<DbRole & { permissions?: DbPermission[] }>> {
+async function loadRoles(baseQuery: any): Promise<RoleWithPermissions[]> {
   const response = await baseQuery({ url: "/roles", method: "GET" });
   if (response.error) return [];
   const data = response.data as { success?: boolean; data?: Array<DbRole & { permissions?: Array<{ permission_id: string; permission_name: string }> }> };
@@ -90,15 +111,39 @@ async function loadRoles(baseQuery: any): Promise<Array<DbRole & { permissions?:
   }));
 }
 
-async function loadEmployeeRoles(baseQuery: any): Promise<EmployeeRoleListResponse["employeeRoles"]> {
-  const response = await baseQuery({
-    url: "/employee-roles",
-    method: "GET",
-    params: { page: 1, limit: 100 },
-  });
-  if (response.error) return [];
-  const data = response.data as { success?: boolean; data?: EmployeeRoleListResponse };
-  return data?.data?.employeeRoles ?? [];
+async function loadEmployeeRoles(baseQuery: any): Promise<EmployeeAssignment[]> {
+  const limit = 100;
+  const fetchPage = async (page: number) => {
+    const response = await baseQuery({
+      url: "/employee-roles",
+      method: "GET",
+      params: { page, limit },
+    });
+    if (response.error) return null;
+    return (response.data as { success?: boolean; data?: EmployeeRoleListResponse })?.data ?? null;
+  };
+
+  // First page tells us how many pages exist; the rest are fetched in parallel
+  // so employees beyond the first 100 assignments keep their roles.
+  const first = await fetchPage(1);
+  if (!first) return [];
+
+  const totalPages = first.pagination?.totalPages ?? 1;
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) => fetchPage(index + 2)),
+  );
+
+  return [first, ...rest].flatMap((page) => page?.employeeRoles ?? []);
+}
+
+function groupAssignmentsByEmployee(assignments: EmployeeAssignment[]): Map<string, EmployeeAssignment[]> {
+  const grouped = new Map<string, EmployeeAssignment[]>();
+  for (const assignment of assignments) {
+    const list = grouped.get(assignment.employee_id);
+    if (list) list.push(assignment);
+    else grouped.set(assignment.employee_id, [assignment]);
+  }
+  return grouped;
 }
 
 export const adminUsersApi = baseApi.injectEndpoints({
@@ -113,11 +158,16 @@ export const adminUsersApi = baseApi.injectEndpoints({
         const limit = arg.limit ?? 10;
         const includeRoleMetadata = arg.includeRoleMetadata ?? false;
 
-        const employeesResponse = await baseQuery({
-          url: "/employees",
-          method: "GET",
-          params: { page, limit },
-        });
+        // Fetch employees and role metadata in parallel instead of one after another.
+        const [employeesResponse, assignments, roles] = await Promise.all([
+          baseQuery({
+            url: "/employees",
+            method: "GET",
+            params: { page, limit },
+          }),
+          includeRoleMetadata ? loadEmployeeRoles(baseQuery) : Promise.resolve([] as EmployeeAssignment[]),
+          includeRoleMetadata ? loadRoles(baseQuery) : Promise.resolve([] as RoleWithPermissions[]),
+        ]);
 
         if (employeesResponse.error) return { error: employeesResponse.error };
 
@@ -134,18 +184,14 @@ export const adminUsersApi = baseApi.injectEndpoints({
           return { data: { employees: [], total: pagination.total, pagination } };
         }
 
-        const assignments = includeRoleMetadata ? await loadEmployeeRoles(baseQuery) : [];
-        const roles = includeRoleMetadata ? await loadRoles(baseQuery) : [];
         const roleMap = new Map(roles.map((role) => [role.id, role]));
-        const assignmentMap = new Map(assignments.map((assignment) => [assignment.employee_id, assignment]));
+        const assignmentsByEmployee = groupAssignmentsByEmployee(assignments);
 
         return {
           data: {
-            employees: employeeList.map((employee) => {
-              const assignment = assignmentMap.get(employee.id);
-              const role = assignment ? roleMap.get(assignment.role_id) : undefined;
-              return mapEmployee(employee, assignment, role);
-            }),
+            employees: employeeList.map((employee) =>
+              mapEmployee(employee, assignmentsByEmployee.get(employee.id), roleMap),
+            ),
             total: pagination.total,
             pagination,
           },
@@ -164,6 +210,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
       query: () => ({ url: "/employees", method: "GET", params: { page: 1, limit: 1 } }),
       transformResponse: (response: { success: boolean; data: EmployeeListResponse }) =>
         response.data?.employees?.[0]?.emp_id ?? null,
+      providesTags: [{ type: "Employee", id: "LIST" }],
     }),
 
     createEmployee: builder.mutation<{ employee: Employee }, CreateEmployeeInput>({
@@ -196,10 +243,54 @@ export const adminUsersApi = baseApi.injectEndpoints({
         body: { status: status === "Inactive" ? "inactive" : "active" },
       }),
       transformResponse: (response: { success: boolean; data: DbEmployee }) => response.data,
+      // Flip the status in every cached employee list right away so the
+      // table responds instantly; roll back if the request fails.
+      async onQueryStarted({ id, status }, { dispatch, getState, queryFulfilled }) {
+        const patches = adminUsersApi.util
+          .selectInvalidatedBy(getState(), [{ type: "Employee", id }])
+          .filter((entry) => entry.endpointName === "getEmployees")
+          .map((entry) =>
+            dispatch(
+              adminUsersApi.util.updateQueryData("getEmployees", entry.originalArgs, (draft) => {
+                const employee = draft.employees.find((item) => item.id === id);
+                if (employee) employee.status = status;
+              }),
+            ),
+          );
+        try {
+          await queryFulfilled;
+        } catch {
+          patches.forEach((patch) => patch.undo());
+        }
+      },
       invalidatesTags: (_result, _error, { id }) => [
         { type: "Employee", id },
         { type: "Employee", id: "LIST" },
       ],
+    }),
+
+    updateEmployee: builder.mutation<DbEmployee, { id: string; name?: string; email?: string }>({
+      query: ({ id, name, email }) => ({
+        url: `/employees/${id}`,
+        method: "PATCH",
+        body: {
+          ...(name !== undefined ? { name: name.trim() } : {}),
+          ...(email !== undefined ? { email: email.trim() } : {}),
+        },
+      }),
+      transformResponse: (response: { success: boolean; data: DbEmployee }) => response.data,
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: "Employee", id },
+        { type: "Employee", id: "LIST" },
+      ],
+    }),
+
+    removeEmployeeRole: builder.mutation<unknown, { assignmentId: string }>({
+      query: ({ assignmentId }) => ({
+        url: `/employee-roles/${assignmentId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Employee", "Role"],
     }),
 
     assignEmployeeAccess: builder.mutation<unknown, { employeeId: string; roleId: string; status?: "active" | "inactive" }>({
@@ -218,5 +309,7 @@ export const {
   useGetLastEmployeeIdQuery,
   useCreateEmployeeMutation,
   useUpdateEmployeeStatusMutation,
+  useUpdateEmployeeMutation,
+  useRemoveEmployeeRoleMutation,
   useAssignEmployeeAccessMutation,
 } = adminUsersApi;

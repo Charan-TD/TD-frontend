@@ -12,13 +12,16 @@ type Props = {
     onChange: (roleName: string) => void;
     disabled?: boolean;
     placeholder?: string;
+    /** Shown on hover while disabled; defaults to a "please wait" message. */
+    disabledHint?: string;
+    disabledHintKind?: "access";
 };
 
 /**
  * Dropdown for picking an existing role, with a search field pinned to
  * the top of the option list so admins can filter long role lists.
  */
-export function RoleSearchSelect({ roles, value, onChange, disabled = false, placeholder = "Select role" }: Props) {
+export function RoleSearchSelect({ roles, value, onChange, disabled = false, placeholder = "Select role", disabledHint = "Please wait, changes are being saved", disabledHintKind }: Props) {
     const [open, setOpen] = useState(false);
     const [term, setTerm] = useState("");
     const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -52,6 +55,8 @@ export function RoleSearchSelect({ roles, value, onChange, disabled = false, pla
                 className="role-select-trigger"
                 onClick={() => setOpen((current) => !current)}
                 disabled={disabled}
+                data-tooltip={disabled ? disabledHint : undefined}
+                data-tooltip-kind={disabled ? disabledHintKind : undefined}
                 aria-haspopup="listbox"
                 aria-expanded={open}
             >

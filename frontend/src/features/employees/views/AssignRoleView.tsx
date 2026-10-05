@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useAssignRoleViewModel } from "../viewmodels/assignRoleViewModel";
 import { can, type PermissionMap } from "../../admin/models/access";
+import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { PermissionMatrixEditor } from "../components/PermissionMatrixEditor";
+import type { PermissionMatrix } from "../models/employee";
 import { SidePanel } from "../../admin/components/SidePanel";
+import { ConfirmDialog } from "../../admin/components/ConfirmDialog";
 
 export function AssignRoleView({
   onBack,
@@ -16,18 +19,36 @@ export function AssignRoleView({
   const vm = useAssignRoleViewModel({ permissions });
   const canCreateRole = can(permissions, "roles", "insert");
   const canUpdateRole = can(permissions, "roles", "update");
-  const canCreatePermission = can(permissions, "permissions", "insert");
+  const canDeleteRole = can(permissions, "roles", "delete");
+  const canAssignRole = can(permissions, "employee_roles", "insert");
 
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
-  const [newRolePermissionIds, setNewRolePermissionIds] = useState<string[]>([]);
+  const [newRoleMatrix, setNewRoleMatrix] = useState<PermissionMatrix>({});
   const [showEditRole, setShowEditRole] = useState(false);
-  const [editPermissionIds, setEditPermissionIds] = useState<string[]>([]);
+  const [editPermissionMatrix, setEditPermissionMatrix] = useState<PermissionMatrix>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
-    setEditPermissionIds(vm.selectedRole?.permissionIds ?? []);
+    setEditPermissionMatrix(vm.selectedRole?.matrix ?? {});
   }, [vm.selectedRole]);
+
+  const createRoleBlocked = disabledReason(
+    [vm.isCreatingRole, "Please wait, the role is being created"],
+    [!newRoleName.trim(), "Enter a role name"],
+    [
+      Object.values(newRoleMatrix).every((actions) => !actions || actions.length === 0),
+      "Give the role at least one permission",
+    ],
+  );
+
+  const assignBlocked = disabledReason(
+    [!canAssignRole, noAccess("assign roles to employees")],
+    [vm.isSaving, "Please wait, the role is being assigned"],
+    [!vm.employeeId, "Select an employee"],
+    [!vm.roleName, "Select a role"],
+  );
 
   return (
     <section className="employee-workspace">
@@ -43,15 +64,16 @@ export function AssignRoleView({
           </p>
         </div>
 
-        {canCreateRole && (
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => setShowCreateRole(true)}
-          >
-            Create Role
-          </button>
-        )}
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => setShowCreateRole(true)}
+          disabled={!canCreateRole}
+          data-tooltip={canCreateRole ? undefined : noAccess("create roles")}
+          data-tooltip-kind="access"
+        >
+          Create Role
+        </button>
       </div>
 
       <div className="assign-role-form">
@@ -112,34 +134,40 @@ export function AssignRoleView({
                 <p>{vm.selectedRole.description}</p>
               )}
             </div>
-            {canUpdateRole && (
+            <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"
                 className="secondary-button"
                 onClick={() => setShowEditRole(true)}
+                disabled={!canUpdateRole || vm.isDeletingRole}
+                data-tooltip={!canUpdateRole ? noAccess("change what this role can do") : vm.isDeletingRole ? "Please wait, this role is being deleted" : undefined}
+                data-tooltip-kind={canUpdateRole ? undefined : "access"}
               >
                 Configure permissions
               </button>
-            )}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={!canDeleteRole || vm.isDeletingRole}
+                data-tooltip={!canDeleteRole ? noAccess("delete roles") : vm.isDeletingRole ? "Please wait, this role is being deleted" : undefined}
+                data-tooltip-kind={canDeleteRole ? undefined : "access"}
+              >
+                {vm.isDeletingRole ? "Deleting..." : "Delete role"}
+              </button>
+            </div>
           </div>
 
           <div className="permission-list">
-            {vm.selectedRole.permissions &&
-              vm.selectedRole.permissions.length > 0 ? (
-              vm.selectedRole.permissions.map((permission) => (
-                <div
-                  className="permission-matrix-row"
-                  key={permission.id}
-                >
-                  <span>
-                    {permission.permission_name}
-                  </span>
+            {Object.entries(vm.selectedRole.matrix).length > 0 ? (
+              Object.entries(vm.selectedRole.matrix).map(([resource, actions]) => (
+                <div className="permission-matrix-row" key={resource}>
+                  <span>{resource}</span>
+                  <small>{(actions ?? []).join(", ")}</small>
                 </div>
               ))
             ) : (
-              <div className="api-state">
-                No permissions configured for this role.
-              </div>
+              <div className="api-state">No permissions configured for this role.</div>
             )}
           </div>
         </div>
@@ -184,9 +212,9 @@ export function AssignRoleView({
         </div>
 
         <PermissionMatrixEditor
-          value={newRolePermissionIds}
+          value={newRoleMatrix}
           permissions={vm.permissions}
-          onChange={setNewRolePermissionIds}
+          onChange={setNewRoleMatrix}
           disabled={vm.isCreatingRole}
         />
 
@@ -196,6 +224,7 @@ export function AssignRoleView({
             className="secondary-button"
             onClick={() => setShowCreateRole(false)}
             disabled={vm.isCreatingRole}
+            data-tooltip={vm.isCreatingRole ? "Please wait, the role is being created" : undefined}
           >
             Cancel
           </button>
@@ -207,22 +236,18 @@ export function AssignRoleView({
               const role = await vm.createRole(
                 newRoleName,
                 newRoleDescription,
-                newRolePermissionIds,
-                {}
+                newRoleMatrix
               );
 
               if (role) {
                 setNewRoleName("");
                 setNewRoleDescription("");
-                setNewRolePermissionIds([]);
+                setNewRoleMatrix({});
                 setShowCreateRole(false);
               }
             }}
-            disabled={
-              vm.isCreatingRole ||
-              !newRoleName.trim() ||
-              newRolePermissionIds.length === 0
-            }
+            disabled={Boolean(createRoleBlocked)}
+            data-tooltip={createRoleBlocked}
           >
             {vm.isCreatingRole
               ? "Creating..."
@@ -242,9 +267,9 @@ export function AssignRoleView({
         {vm.selectedRole && (
           <>
             <PermissionMatrixEditor
-              value={editPermissionIds}
+              value={editPermissionMatrix}
               permissions={vm.permissions}
-              onChange={setEditPermissionIds}
+              onChange={setEditPermissionMatrix}
               disabled={vm.isUpdatingRole}
             />
             <div className="assign-role-actions">
@@ -253,6 +278,7 @@ export function AssignRoleView({
                 className="secondary-button"
                 onClick={() => setShowEditRole(false)}
                 disabled={vm.isUpdatingRole}
+                data-tooltip={vm.isUpdatingRole ? "Please wait, your changes are being saved" : undefined}
               >
                 Cancel
               </button>
@@ -264,11 +290,12 @@ export function AssignRoleView({
                     vm.selectedRole!.id,
                     vm.selectedRole!.name,
                     vm.selectedRole!.description,
-                    editPermissionIds,
+                    editPermissionMatrix,
                   );
                   if (role) setShowEditRole(false);
                 }}
                 disabled={vm.isUpdatingRole}
+                data-tooltip={vm.isUpdatingRole ? "Please wait, your changes are being saved" : undefined}
               >
                 {vm.isUpdatingRole ? "Saving..." : "Save permissions"}
               </button>
@@ -276,6 +303,27 @@ export function AssignRoleView({
           </>
         )}
       </SidePanel>
+
+      <ConfirmDialog
+        open={showDeleteConfirm && Boolean(vm.selectedRole)}
+        tone="danger"
+        title="Delete role?"
+        message={
+          <>
+            You are about to delete <strong>{vm.selectedRole?.name}</strong>.
+            <br />
+            This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete role"
+        busyLabel="Deleting..."
+        busy={vm.isDeletingRole}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={async () => {
+          await vm.deleteRole(vm.selectedRole!.id);
+          setShowDeleteConfirm(false);
+        }}
+      />
 
       {vm.errorMessage && (
         <div className="api-state">
@@ -296,6 +344,7 @@ export function AssignRoleView({
             className="secondary-button"
             onClick={onBack}
             disabled={vm.isSaving}
+            data-tooltip={vm.isSaving ? "Please wait, the role is being assigned" : undefined}
           >
             Cancel
           </button>
@@ -305,11 +354,9 @@ export function AssignRoleView({
           type="button"
           className="primary-button"
           onClick={vm.save}
-          disabled={
-            vm.isSaving ||
-            !vm.employeeId ||
-            !vm.roleName
-          }
+          disabled={Boolean(assignBlocked)}
+          data-tooltip={assignBlocked}
+          data-tooltip-kind={canAssignRole ? undefined : "access"}
         >
           {vm.isSaving
             ? "Assigning..."

@@ -2776,6 +2776,8 @@ td>strong {
 }
 
 .primary-button:disabled,
+.secondary-button:disabled,
+.icon-close:disabled,
 .pagination button:disabled,
 .table-action:disabled {
   opacity: .5;
@@ -3546,6 +3548,15 @@ td>strong {
   border: 1px solid #e5e3dd;
   border-radius: 16px;
   background: #fafbf9;
+}
+
+/* User details shown as a centred pop-up from the Users table */
+.user-details-modal {
+  width: min(560px, 100%);
+}
+
+.user-details-modal .user-detail-grid {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .user-details-header {
@@ -5473,4 +5484,168 @@ img.avatar {
 
 .topbar-action-link--primary.is-disabled svg {
   color: #fff;
+}
+
+/* Confirm dialog */
+.confirm-dialog {
+  width: min(420px, 100%);
+  text-align: center;
+}
+
+.confirm-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--orange-deep);
+  background: var(--orange-wash);
+}
+
+.confirm-dialog--danger .confirm-dialog-icon {
+  color: #b24b42;
+  background: #fdecea;
+}
+
+.confirm-dialog h3 {
+  font-size: 20px;
+  letter-spacing: -.02em;
+}
+
+.confirm-dialog-message {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.confirm-dialog .modal-actions {
+  justify-content: center;
+  margin-top: 22px;
+}
+
+.confirm-dialog .modal-actions button {
+  min-width: 120px;
+}
+
+.primary-button.confirm-dialog-danger {
+  background: #b24b42;
+  border-color: #b24b42;
+  box-shadow: 0 8px 16px rgba(178, 75, 66, .22);
+}
+
+.primary-button.confirm-dialog-danger:hover {
+  background: #9a3d35;
+  border-color: #9a3d35;
+}
+
+/* Skeleton loaders */
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef0f5 0%, #f7f8fb 40%, #eef0f5 80%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+.is-refreshing {
+  opacity: .6;
+  transition: opacity .15s ease;
+}
+
+/* ==========================================================
+ * App tooltip (TooltipLayer) - explains disabled buttons.
+ * ========================================================== */
+.app-tooltip {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: 270px;
+  padding: 9px 12px 9px 9px;
+  border-radius: 11px;
+  background: var(--ink);
+  color: #eef0f6;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 14px 34px rgba(20, 27, 45, .28);
+  pointer-events: none;
+  animation: appTooltipIn .14s ease-out;
+}
+
+.app-tooltip--bottom {
+  animation-name: appTooltipInBelow;
+}
+
+.app-tooltip__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .12);
+  color: #ffcf9e;
+}
+
+.app-tooltip--access .app-tooltip__icon {
+  background: var(--orange);
+  color: #fff;
+}
+
+.app-tooltip__body {
+  display: grid;
+  gap: 1px;
+  padding-top: 2px;
+}
+
+.app-tooltip__body strong {
+  color: #ffcf9e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.app-tooltip__arrow {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: var(--ink);
+  transform: rotate(45deg);
+}
+
+.app-tooltip--top .app-tooltip__arrow {
+  bottom: -4px;
+}
+
+.app-tooltip--bottom .app-tooltip__arrow {
+  top: -4px;
+}
+
+@keyframes appTooltipIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes appTooltipInBelow {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-tooltip { animation: none; }
 }
