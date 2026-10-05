@@ -124,8 +124,10 @@ const preparePermissions = async (client, permissions) => {
     |--------------------------------------------------------------------------
     | permission_name must be resource only
     |--------------------------------------------------------------------------
+    | Resources may contain underscores (e.g. employee_roles), but must not
+    | embed an action suffix such as users_read; actions live on the role.
     */
-    if (resource.includes("_")) {
+    if (/_(read|insert|update|delete)$/i.test(resource)) {
       throw new AppError(
         `Invalid permission resource '${resource}'. permission_name must contain only the resource name.`,
         400
