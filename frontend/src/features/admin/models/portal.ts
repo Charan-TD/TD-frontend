@@ -2,7 +2,7 @@ import type { PermissionMap } from "./access";
 
 export type Screen = "login" | "dashboard" | "management" | "profile" | "edit-profile" | "employees" | "employee-details" | "assign-role" | "employee-activity";
 
-export type PortalSection = "dashboard" | "users" | "riders" | "restaurants" | "orders" | "sales" | "marketing" | "reports" | "employees" | "stations" | "trains";
+export type PortalSection = "dashboard" | "users" | "riders" | "restaurants" | "orders" | "sales" | "marketing" | "reports" | "employees" | "stations";
 
 export type AdminProfile = {
   name: string;

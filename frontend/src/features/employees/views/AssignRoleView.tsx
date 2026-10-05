@@ -6,7 +6,7 @@ import { can, type PermissionMap } from "../../admin/models/access";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { PermissionMatrixEditor } from "../components/PermissionMatrixEditor";
 import type { PermissionMatrix } from "../models/employee";
-import { describeActions, isLinkedResource, sectionDisplayName } from "../models/permissions";
+import { describeActions, isLinkedResource, isPausedSection, sectionDisplayName } from "../models/permissions";
 import { SidePanel } from "../../admin/components/SidePanel";
 import { ConfirmDialog } from "../../admin/components/ConfirmDialog";
 
@@ -37,7 +37,8 @@ export function AssignRoleView({
 
   // Linked access follows its section, so it isn't listed separately.
   const visibleRoleAccess = Object.entries(vm.selectedRole?.matrix ?? {}).filter(
-    ([resource, actions]) => !isLinkedResource(resource) && (actions ?? []).length > 0,
+    ([resource, actions]) =>
+      !isLinkedResource(resource) && !isPausedSection(resource) && (actions ?? []).length > 0,
   );
 
   const createRoleBlocked = disabledReason(

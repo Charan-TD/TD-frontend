@@ -17,7 +17,7 @@ import {
 } from "../api/rolesApi";
 
 import type { Employee, PermissionMatrix } from "../models/employee";
-import { withLinkedAccess } from "../models/permissions";
+import { isPausedSection, withLinkedAccess } from "../models/permissions";
 
 import type { Role } from "../api/rolesApi";
 
@@ -40,7 +40,7 @@ export function buildRolePermissionPayload(
 
   // A section's actions also cover its linked behind-the-scenes access.
   return Object.entries(withLinkedAccess(matrix)).flatMap(([resource, actions]) => {
-    if (!actions || actions.length === 0) return [];
+    if (!actions || actions.length === 0 || isPausedSection(resource)) return [];
     const permission = byResource.get(resource.trim().toLowerCase());
     if (!permission) return [];
     return [{ permissionId: permission.id, actions }];

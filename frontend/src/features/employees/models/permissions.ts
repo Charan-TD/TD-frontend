@@ -149,7 +149,6 @@ export function normalizePermissionMatrix(
     "orders",
     "stations",
     "sales",
-    "trains",
   ];
 
   permissions.forEach((permission) => {
@@ -375,6 +374,17 @@ export function withLinkedAccess(
   });
 
   return next;
+}
+
+/**
+ * Sections that exist in the database but aren't in use yet. They are left
+ * out of the role editor, role summaries and anything saved on a role.
+ * Remove a name from this list to bring that section back.
+ */
+export const PAUSED_SECTIONS: readonly string[] = ["trains"];
+
+export function isPausedSection(resource: string): boolean {
+  return PAUSED_SECTIONS.includes(resource);
 }
 
 /** Plain-language names for the four actions, as admins see them. */

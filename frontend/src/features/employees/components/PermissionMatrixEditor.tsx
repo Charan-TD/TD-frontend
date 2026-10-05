@@ -14,6 +14,7 @@ import {
   ACTION_DISPLAY_LABELS,
   describeActions,
   isLinkedResource,
+  isPausedSection,
   linkedAccessNote,
   sectionDisplayName,
 } from "../models/permissions";
@@ -62,13 +63,19 @@ export function PermissionMatrixEditor({
         };
       })
       // Linked access follows its section's row automatically.
-      .filter((row) => row.resource.length > 0 && !isLinkedResource(row.resource))
+      .filter(
+        (row) =>
+          row.resource.length > 0 && !isLinkedResource(row.resource) && !isPausedSection(row.resource),
+      )
       .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
   }, [permissions]);
 
   const selectedResources = Object.entries(value).filter(
     (entry): entry is [string, AdminPermissionCode[]] =>
-      !isLinkedResource(entry[0]) && Array.isArray(entry[1]) && entry[1].length > 0,
+      !isLinkedResource(entry[0]) &&
+      !isPausedSection(entry[0]) &&
+      Array.isArray(entry[1]) &&
+      entry[1].length > 0,
   );
   const selectedActionCount = selectedResources.reduce((sum, [, actions]) => sum + actions.length, 0);
 

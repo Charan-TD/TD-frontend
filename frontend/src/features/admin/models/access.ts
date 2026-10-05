@@ -13,7 +13,6 @@ export const PORTAL_SECTIONS: PortalSection[] = [
   "sales",
   "employees",
   "stations",
-  "trains",
 ];
 
 const VALID_ACTIONS = new Set<PermissionAction>([
