@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { PermissionMatrix } from "../models/employee";
 import { can, type PermissionMap } from "../../admin/models/access";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
+import { Icon } from "../../admin/components/Icon";
 
 import {
   useEmployeesViewModel,
@@ -108,7 +109,10 @@ export function EmployeesView({
     setPermissionMatrix,
   ] = useState<PermissionMatrix>({});
 
+  const [showPassword, setShowPassword] = useState(false);
+
   const resetForm = () => {
+    setShowPassword(false);
     setEmployeeId("");
     setEmployeeIdEdited(false);
     setName("");
@@ -417,7 +421,9 @@ export function EmployeesView({
 
             {!vm.employees.length && (
               <div className="api-state">
-                No employees found.
+                {vm.query.trim()
+                  ? `No employees match "${vm.query.trim()}".`
+                  : "No employees found."}
               </div>
             )}
           </div>
@@ -566,18 +572,33 @@ export function EmployeesView({
           <label>
             <span>Password</span>
 
-            <input
-              type="password"
-              value={password}
-              onChange={(event) =>
-                setPassword(
-                  event.target.value
-                )
-              }
-              minLength={8}
-              placeholder="Minimum 8 characters"
-              disabled={isCreating}
-            />
+            <span className="password-field">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value
+                  )
+                }
+                minLength={8}
+                placeholder="Minimum 8 characters"
+                autoComplete="new-password"
+                disabled={isCreating}
+              />
+
+              <button
+                type="button"
+                className="password-field__toggle"
+                onClick={() => setShowPassword((current) => !current)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                data-tooltip={showPassword ? "Hide password" : "Show password"}
+                data-tooltip-icon={showPassword ? "eye-off" : "eye"}
+              >
+                <Icon name={showPassword ? "eye-off" : "eye"} size={15} />
+              </button>
+            </span>
           </label>
         </div>
 

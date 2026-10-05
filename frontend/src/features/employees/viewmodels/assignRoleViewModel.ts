@@ -4,6 +4,7 @@ import { can, type PermissionMap } from "../../admin/models/access";
 import {
   useAssignEmployeeAccessMutation,
   useGetEmployeesQuery,
+  useRestoreEmployeeRoleMutation,
 } from "../api/adminUsersApi";
 
 import {
@@ -15,7 +16,8 @@ import {
   useGetRolesQuery,
 } from "../api/rolesApi";
 
-import type { PermissionMatrix } from "../models/employee";
+import type { Employee, PermissionMatrix } from "../models/employee";
+import { withLinkedAccess } from "../models/permissions";
 
 import type { Role } from "../api/rolesApi";
 
@@ -36,12 +38,40 @@ export function buildRolePermissionPayload(
     ]),
   );
 
-  return Object.entries(matrix).flatMap(([resource, actions]) => {
+  // A section's actions also cover its linked behind-the-scenes access.
+  return Object.entries(withLinkedAccess(matrix)).flatMap(([resource, actions]) => {
     if (!actions || actions.length === 0) return [];
     const permission = byResource.get(resource.trim().toLowerCase());
     if (!permission) return [];
     return [{ permissionId: permission.id, actions }];
   });
+}
+
+/**
+ * Gives an employee a role. The API keeps removed assignments (as inactive)
+ * and refuses to create a second one for the same role, so a role the
+ * employee had before is switched back on instead of created again.
+ */
+export async function assignOrRestoreRole(
+  employee: Employee | null | undefined,
+  employeeId: string,
+  roleId: string,
+  assign: (input: { employeeId: string; roleId: string; status: "active" }) => Promise<unknown>,
+  restore: (input: { assignmentId: string }) => Promise<unknown>,
+): Promise<"assigned" | "restored"> {
+  const existing = employee?.roles.find((role) => role.id === roleId);
+
+  if (existing?.status === "Active") {
+    throw new Error("This employee already has this role.");
+  }
+
+  if (existing) {
+    await restore({ assignmentId: existing.assignmentId });
+    return "restored";
+  }
+
+  await assign({ employeeId, roleId, status: "active" });
+  return "assigned";
 }
 
 export function getErrorMessage(error: unknown): string {
@@ -93,8 +123,7 @@ export function useAssignRoleViewModel(
     isFetching: isEmployeesFetching,
     error: employeesError,
   } = useGetEmployeesQuery({
-    page: 1,
-    limit: 100,
+    all: true,
     includeRoleMetadata:
       can(authPermissions, "employee_roles", "read") &&
       can(authPermissions, "roles", "read"),
@@ -121,8 +150,11 @@ export function useAssignRoleViewModel(
     skip: !can(authPermissions, "permissions", "read"),
   });
 
-  const [assignEmployeeAccess, { isLoading: isSaving }] =
+  const [assignEmployeeAccess, { isLoading: isAssigning }] =
     useAssignEmployeeAccessMutation();
+  const [restoreEmployeeRole, { isLoading: isRestoring }] =
+    useRestoreEmployeeRoleMutation();
+  const isSaving = isAssigning || isRestoring;
 
   const [createRoleMutation, { isLoading: isCreatingRole }] =
     useCreateRoleMutation();
@@ -179,13 +211,19 @@ export function useAssignRoleViewModel(
         return false;
       }
 
-      await assignEmployeeAccess({
+      const outcome = await assignOrRestoreRole(
+        employees.find((item) => item.id === employeeId),
         employeeId,
-        roleId: role.id,
-        status: "active",
-      }).unwrap();
+        role.id,
+        (input) => assignEmployeeAccess(input).unwrap(),
+        (input) => restoreEmployeeRole(input).unwrap(),
+      );
 
-      setSavedMessage("Role assigned successfully.");
+      setSavedMessage(
+        outcome === "restored"
+          ? "Role restored for this employee."
+          : "Role assigned successfully.",
+      );
 
       onSaved?.();
 

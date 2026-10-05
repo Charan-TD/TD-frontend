@@ -315,3 +315,86 @@ export function countGrants(
     0
   );
 }
+/**
+ * Some sections need extra, behind-the-scenes access to work. Admins
+ * shouldn't have to grant those one by one, so each linked resource
+ * always gets exactly the actions ticked for its section, and is hidden
+ * from the permission editor.
+ *
+ * To bundle access for another section, add an entry here, e.g.
+ *   restaurants: {
+ *     linked: ["restaurant_menus", "restaurant_documents"],
+ *     note: "Also covers menus and documents.",
+ *   },
+ * Then every place that saves a role picks it up.
+ */
+export const SECTION_LINKED_ACCESS: Record<
+  string,
+  { linked: readonly string[]; note: string }
+> = {
+  employees: {
+    // Assigning roles, editing roles and reading the permission list.
+    linked: ["employee_roles", "roles", "permissions"],
+    note: "Also lets them assign roles and set up role access.",
+  },
+};
+
+const LINKED_RESOURCES = new Set(
+  Object.values(SECTION_LINKED_ACCESS).flatMap((entry) => entry.linked)
+);
+
+/** True for a resource that follows another section (see SECTION_LINKED_ACCESS). */
+export function isLinkedResource(resource: string): boolean {
+  return LINKED_RESOURCES.has(resource);
+}
+
+/** The extra line shown under a section in the editor, if it bundles access. */
+export function linkedAccessNote(section: string): string | undefined {
+  return SECTION_LINKED_ACCESS[section]?.note;
+}
+
+/**
+ * Copies each section's actions onto its linked resources, replacing
+ * whatever they had, so saving a role grants them together.
+ */
+export function withLinkedAccess(
+  matrix: PermissionMatrix
+): PermissionMatrix {
+  const next: PermissionMatrix = { ...matrix };
+
+  Object.entries(SECTION_LINKED_ACCESS).forEach(([section, { linked }]) => {
+    const actions = matrix[section] ?? [];
+
+    linked.forEach((resource) => {
+      if (actions.length > 0) {
+        next[resource] = [...actions];
+      } else {
+        delete next[resource];
+      }
+    });
+  });
+
+  return next;
+}
+
+/** Plain-language names for the four actions, as admins see them. */
+export const ACTION_DISPLAY_LABELS: Record<string, string> = {
+  read: "View",
+  insert: "Add",
+  update: "Edit",
+  delete: "Delete",
+};
+
+/** e.g. ["read", "insert"] -> "View, Add" */
+export function describeActions(actions: readonly string[] | undefined): string {
+  return (actions ?? [])
+    .map((action) => ACTION_DISPLAY_LABELS[action] ?? action)
+    .join(", ");
+}
+
+/** e.g. "delivery_partners" -> "Delivery Partners" */
+export function sectionDisplayName(resource: string): string {
+  return resource
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}

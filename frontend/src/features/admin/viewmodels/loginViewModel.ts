@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useEmployeeLoginMutation } from "../api/authApi";
 import { baseApi } from "../api/baseApi";
@@ -9,11 +9,22 @@ import { setAuthSession } from "../authSlice";
 import { store } from "../store";
 import { normalizePermissionMap } from "../models/access";
 
+/** sessionStorage flag set when the portal signs someone out because their login expired. */
+export const SESSION_EXPIRED_NOTE_KEY = "train_dabba_session_expired";
+
 export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void) {
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [email, setEmail] = useState("udaySir@traindabba.in");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Explains why the person is back here if their login expired. Read after
+  // mounting so the server-rendered page and the browser agree.
+  useEffect(() => {
+    if (!sessionStorage.getItem(SESSION_EXPIRED_NOTE_KEY)) return;
+    sessionStorage.removeItem(SESSION_EXPIRED_NOTE_KEY);
+    setErrorMessage("Your session has expired. Please sign in again.");
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [employeeLogin] = useEmployeeLoginMutation();

@@ -6,6 +6,7 @@ import {
   useAssignEmployeeAccessMutation,
   useGetEmployeesQuery,
   useRemoveEmployeeRoleMutation,
+  useRestoreEmployeeRoleMutation,
   useUpdateEmployeeMutation,
 } from "../api/adminUsersApi";
 import {
@@ -14,10 +15,10 @@ import {
   useUpdateRoleMutation,
 } from "../api/rolesApi";
 import type { PermissionMatrix } from "../models/employee";
-import { buildRolePermissionPayload, getErrorMessage } from "./assignRoleViewModel";
+import { assignOrRestoreRole, buildRolePermissionPayload, getErrorMessage } from "./assignRoleViewModel";
 
 export function useEmployeeDetailsViewModel(employeeId: string | null, authPermissions: PermissionMap = {}) {
-  const { data, isLoading } = useGetEmployeesQuery({ page: 1, limit: 100, includeRoleMetadata: true });
+  const { data, isLoading } = useGetEmployeesQuery({ all: true, includeRoleMetadata: true });
   const employees = data?.employees ?? [];
 
   const employee = useMemo(
@@ -36,6 +37,7 @@ export function useEmployeeDetailsViewModel(employeeId: string | null, authPermi
   const [updateRoleMutation, { isLoading: isUpdatingRole }] = useUpdateRoleMutation();
   const [assignEmployeeAccess, { isLoading: isAssigningRole }] = useAssignEmployeeAccessMutation();
   const [removeEmployeeRoleMutation, { isLoading: isRemovingRole }] = useRemoveEmployeeRoleMutation();
+  const [restoreEmployeeRoleMutation, { isLoading: isRestoringRole }] = useRestoreEmployeeRoleMutation();
 
   const [savedMessage, setSavedMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -85,10 +87,20 @@ export function useEmployeeDetailsViewModel(employeeId: string | null, authPermi
   const addRole = (roleId: string) => {
     if (!employee) return Promise.resolve(false);
     return run(
-      () => assignEmployeeAccess({ employeeId: employee.id, roleId, status: "active" }).unwrap(),
+      () =>
+        assignOrRestoreRole(
+          employee,
+          employee.id,
+          roleId,
+          (input) => assignEmployeeAccess(input).unwrap(),
+          (input) => restoreEmployeeRoleMutation(input).unwrap(),
+        ),
       "Role assigned successfully."
     );
   };
+
+  const restoreRole = (assignmentId: string) =>
+    run(() => restoreEmployeeRoleMutation({ assignmentId }).unwrap(), "Role restored for this employee.");
 
   const removeRole = (assignmentId: string) =>
     run(() => removeEmployeeRoleMutation({ assignmentId }).unwrap(), "Role removed from employee.");
@@ -103,6 +115,7 @@ export function useEmployeeDetailsViewModel(employeeId: string | null, authPermi
     isUpdatingRole,
     isAssigningRole,
     isRemovingRole,
+    isRestoringRole,
 
     savedMessage,
     errorMessage,
@@ -111,5 +124,6 @@ export function useEmployeeDetailsViewModel(employeeId: string | null, authPermi
     updateRole,
     addRole,
     removeRole,
+    restoreRole,
   };
 }

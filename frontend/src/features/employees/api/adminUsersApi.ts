@@ -67,6 +67,8 @@ function mapEmployee(
     status: normalizeStatus(assignment.status),
   }));
 
+  const activeRoles = roles.filter((role) => role.status === "Active");
+
   // Union of permissions from every active role, de-duplicated by id.
   const permissionById = new Map<string, DbPermission>();
   for (const assignment of assignments) {
@@ -83,8 +85,10 @@ function mapEmployee(
     empId: employee.emp_id,
     name: employee.name,
     email: employee.email,
-    role: roles.length ? roles.map((role) => role.name).join(", ") : "Unassigned",
-    roleId: roles[0]?.id,
+    // Removed (inactive) assignments stay in `roles` so they can be restored,
+    // but only active ones count as the employee's current role.
+    role: activeRoles.length ? activeRoles.map((role) => role.name).join(", ") : "Unassigned",
+    roleId: activeRoles[0]?.id,
     roles,
     roleIds: roles.map((role) => role.id),
     status: normalizeStatus(employee.status),
@@ -146,25 +150,41 @@ function groupAssignmentsByEmployee(assignments: EmployeeAssignment[]): Map<stri
   return grouped;
 }
 
+/** The API's maximum page size; used when loading every employee. */
+const ALL_EMPLOYEES_PAGE_SIZE = 100;
+
 export const adminUsersApi = baseApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     getEmployees: builder.query<
       { employees: Employee[]; total: number; pagination: Pagination },
-      { page?: number; limit?: number; includeRoleMetadata?: boolean }
+      {
+        page?: number;
+        limit?: number;
+        includeRoleMetadata?: boolean;
+        /**
+         * Load every employee (page by page, at the API's 100-per-page
+         * maximum) so search can match people on any page. The API has
+         * no search parameter of its own.
+         */
+        all?: boolean;
+      }
     >({
       async queryFn(arg = {}, _api, _extraOptions, baseQuery) {
-        const page = arg.page ?? 1;
-        const limit = arg.limit ?? 10;
+        const page = arg.all ? 1 : arg.page ?? 1;
+        const limit = arg.all ? ALL_EMPLOYEES_PAGE_SIZE : arg.limit ?? 10;
         const includeRoleMetadata = arg.includeRoleMetadata ?? false;
 
-        // Fetch employees and role metadata in parallel instead of one after another.
-        const [employeesResponse, assignments, roles] = await Promise.all([
+        const fetchPage = (pageNumber: number) =>
           baseQuery({
             url: "/employees",
             method: "GET",
-            params: { page, limit },
-          }),
+            params: { page: pageNumber, limit },
+          });
+
+        // Fetch employees and role metadata in parallel instead of one after another.
+        const [employeesResponse, assignments, roles] = await Promise.all([
+          fetchPage(page),
           includeRoleMetadata ? loadEmployeeRoles(baseQuery) : Promise.resolve([] as EmployeeAssignment[]),
           includeRoleMetadata ? loadRoles(baseQuery) : Promise.resolve([] as RoleWithPermissions[]),
         ]);
@@ -172,13 +192,29 @@ export const adminUsersApi = baseApi.injectEndpoints({
         if (employeesResponse.error) return { error: employeesResponse.error };
 
         const payload = employeesResponse.data as { success: boolean; data: EmployeeListResponse };
-        const employeeList = payload.data?.employees ?? [];
-        const pagination = payload.data?.pagination ?? {
+        let employeeList = payload.data?.employees ?? [];
+        let pagination = payload.data?.pagination ?? {
           page,
           limit,
           total: employeeList.length,
           totalPages: employeeList.length ? 1 : 0,
         };
+
+        if (arg.all && pagination.totalPages > 1) {
+          const rest = await Promise.all(
+            Array.from({ length: pagination.totalPages - 1 }, (_, index) => fetchPage(index + 2)),
+          );
+          const failed = rest.find((response) => response.error);
+          if (failed?.error) return { error: failed.error };
+
+          employeeList = employeeList.concat(
+            ...rest.map(
+              (response) =>
+                (response.data as { data?: EmployeeListResponse }).data?.employees ?? [],
+            ),
+          );
+          pagination = { ...pagination, page: 1, limit: employeeList.length, totalPages: 1 };
+        }
 
         if (!employeeList.length) {
           return { data: { employees: [], total: pagination.total, pagination } };
@@ -293,6 +329,16 @@ export const adminUsersApi = baseApi.injectEndpoints({
       invalidatesTags: ["Employee", "Role"],
     }),
 
+    /** Turns a removed (inactive) role assignment back on. */
+    restoreEmployeeRole: builder.mutation<unknown, { assignmentId: string }>({
+      query: ({ assignmentId }) => ({
+        url: `/employee-roles/${assignmentId}`,
+        method: "PATCH",
+        body: { status: "active" },
+      }),
+      invalidatesTags: ["Employee", "Role"],
+    }),
+
     assignEmployeeAccess: builder.mutation<unknown, { employeeId: string; roleId: string; status?: "active" | "inactive" }>({
       query: ({ employeeId, roleId, status = "active" }) => ({
         url: "/employee-roles",
@@ -305,6 +351,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
 });
 
 export const {
+  useRestoreEmployeeRoleMutation,
   useGetEmployeesQuery,
   useGetLastEmployeeIdQuery,
   useCreateEmployeeMutation,

@@ -10,12 +10,19 @@ import {
   type DbPermission,
   type PermissionMatrix,
 } from "../models/employee";
+import {
+  ACTION_DISPLAY_LABELS,
+  describeActions,
+  isLinkedResource,
+  linkedAccessNote,
+  sectionDisplayName,
+} from "../models/permissions";
 
 const STANDARD_OPERATIONS: Array<{ key: AdminPermissionCode; label: string }> = [
-  { key: "read", label: "Read" },
-  { key: "insert", label: "Insert" },
-  { key: "update", label: "Update" },
-  { key: "delete", label: "Delete" },
+  { key: "read", label: ACTION_DISPLAY_LABELS.read },
+  { key: "insert", label: ACTION_DISPLAY_LABELS.insert },
+  { key: "update", label: ACTION_DISPLAY_LABELS.update },
+  { key: "delete", label: ACTION_DISPLAY_LABELS.delete },
 ];
 
 type Props = {
@@ -24,12 +31,6 @@ type Props = {
   onChange: (matrix: PermissionMatrix) => void;
   disabled?: boolean;
 };
-
-function titleizeResource(resource: string) {
-  return resource
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
 
 export function PermissionMatrixEditor({
   value,
@@ -48,21 +49,26 @@ export function PermissionMatrixEditor({
         const resource = permission.permission_name.trim().toLowerCase();
         const meta = portalMeta.get(resource as (typeof PORTAL_SECTIONS)[number]["id"]);
 
+        const baseDescription =
+          meta?.description ?? `Manage ${sectionDisplayName(resource).toLowerCase()}`;
+        const note = linkedAccessNote(resource);
+
         return {
           permission,
           resource,
-          label: meta?.label ?? titleizeResource(resource),
-          description:
-            meta?.description ?? `Manage ${titleizeResource(resource).toLowerCase()} permissions`,
+          label: meta?.label ?? sectionDisplayName(resource),
+          description: note ? `${baseDescription}. ${note}` : baseDescription,
           order: portalOrder.get(resource as (typeof PORTAL_SECTIONS)[number]["id"]) ?? 1000,
         };
       })
-      .filter((row) => row.resource.length > 0)
+      // Linked access follows its section's row automatically.
+      .filter((row) => row.resource.length > 0 && !isLinkedResource(row.resource))
       .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
   }, [permissions]);
 
   const selectedResources = Object.entries(value).filter(
-    (entry): entry is [string, AdminPermissionCode[]] => Array.isArray(entry[1]) && entry[1].length > 0,
+    (entry): entry is [string, AdminPermissionCode[]] =>
+      !isLinkedResource(entry[0]) && Array.isArray(entry[1]) && entry[1].length > 0,
   );
   const selectedActionCount = selectedResources.reduce((sum, [, actions]) => sum + actions.length, 0);
 
@@ -109,9 +115,9 @@ export function PermissionMatrixEditor({
       <div className="access-selector-header">
         <div>
           <strong>Permissions</strong>
-          <p>Select a backend resource and the exact actions this role can perform.</p>
+          <p>Choose what this role can see and do in each section.</p>
         </div>
-        <span>{selectedResources.length} resources · {selectedActionCount} actions</span>
+        <span>{selectedResources.length} sections · {selectedActionCount} actions</span>
       </div>
 
       <div className="access-selector-summary">
@@ -121,7 +127,7 @@ export function PermissionMatrixEditor({
           )}
           {selectedResources.map(([resource, actions]) => (
             <span key={resource}>
-              {titleizeResource(resource)}: {actions.join(", ")}
+              {sectionDisplayName(resource)}: {describeActions(actions)}
             </span>
           ))}
         </div>
@@ -141,7 +147,7 @@ export function PermissionMatrixEditor({
         onClose={() => setOpen(false)}
         eyebrow="PERMISSIONS"
         title="Configure permissions"
-        description="Choose resource-level actions exactly as the backend expects: read, insert, update and delete."
+        description="Tick what this role can do in each section: view, add, edit or delete."
         elevated
         widthVariant="wide"
         footer={
@@ -151,7 +157,7 @@ export function PermissionMatrixEditor({
         }
       >
         <div className="matrix-toolbar">
-          <span>{selectedResources.length} of {rows.length} resources selected</span>
+          <span>{selectedResources.length} of {rows.length} sections selected</span>
           {!disabled && (
             <button type="button" className="text-button" onClick={clearAll}>
               Clear all
@@ -213,7 +219,7 @@ export function PermissionMatrixEditor({
           })}
 
           {rows.length === 0 && (
-            <div className="api-state">No permission resources were returned by the backend.</div>
+            <div className="api-state">No sections are available to set up yet.</div>
           )}
         </div>
       </SidePanel>

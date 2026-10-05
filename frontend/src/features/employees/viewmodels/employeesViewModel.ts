@@ -22,6 +22,8 @@ import type {
   PermissionMatrix,
 } from "../models/employee";
 
+import { buildRolePermissionPayload } from "./assignRoleViewModel";
+
 type CreateEmployeeFormInput = {
   empId: string;
   name: string;
@@ -35,50 +37,66 @@ type CreateEmployeeFormInput = {
 
 const PAGE_SIZE = 8;
 
-function buildRolePermissionPayload(
-  matrix: PermissionMatrix,
-  availablePermissions: Array<{ id: string; permission_name: string }>,
-) {
-  const byResource = new Map(
-    availablePermissions.map((permission) => [
-      permission.permission_name.trim().toLowerCase(),
-      permission,
-    ]),
-  );
-
-  return Object.entries(matrix).flatMap(([resource, actions]) => {
-    if (!actions || actions.length === 0) return [];
-    const permission = byResource.get(resource.trim().toLowerCase());
-    if (!permission) return [];
-    return [{ permissionId: permission.id, actions }];
-  });
-}
-
 export function useEmployeesViewModel(authPermissions: PermissionMap) {
   const [page, setPage] =
     useState(1);
 
-  const {
-    data: employeesData,
-    isLoading,
-    isFetching,
-    isError,
-    refetch,
-  } = useGetEmployeesQuery({
-    page,
-    limit: PAGE_SIZE,
-    includeRoleMetadata:
-      can(authPermissions, "employee_roles", "read") &&
-      can(authPermissions, "roles", "read"),
-  });
+  const [query, setQueryValue] =
+    useState("");
 
-  const employees =
-    employeesData?.employees ?? [];
+  const searchTerm = query.trim().toLowerCase();
+  const isSearching = searchTerm.length > 0;
 
-  const totalEmployees =
-    employeesData?.total ?? 0;
+  const includeRoleMetadata =
+    can(authPermissions, "employee_roles", "read") &&
+    can(authPermissions, "roles", "read");
 
-  const totalPages = Math.max(1, employeesData?.pagination.totalPages ?? 1);
+  // Normal browsing asks the API for one page at a time. Searching needs
+  // every employee (the API can't search), so it switches to the full
+  // list and pages through the matches here instead.
+  const pagedQuery = useGetEmployeesQuery(
+    { page, limit: PAGE_SIZE, includeRoleMetadata },
+    { skip: isSearching },
+  );
+
+  const allQuery = useGetEmployeesQuery(
+    { all: true, includeRoleMetadata },
+    { skip: !isSearching },
+  );
+
+  const activeQuery = isSearching ? allQuery : pagedQuery;
+  const { isLoading, isFetching, isError, refetch } = activeQuery;
+
+  const matchingEmployees = useMemo(() => {
+    const source = activeQuery.data?.employees ?? [];
+    if (!isSearching) return source;
+
+    return source.filter(
+      (employee) =>
+        employee.name.toLowerCase().includes(searchTerm) ||
+        employee.email.toLowerCase().includes(searchTerm) ||
+        employee.empId.toLowerCase().includes(searchTerm) ||
+        employee.role.toLowerCase().includes(searchTerm),
+    );
+  }, [activeQuery.data, isSearching, searchTerm]);
+
+  const totalEmployees = isSearching
+    ? matchingEmployees.length
+    : pagedQuery.data?.total ?? 0;
+
+  const totalPages = isSearching
+    ? Math.max(1, Math.ceil(matchingEmployees.length / PAGE_SIZE))
+    : Math.max(1, pagedQuery.data?.pagination.totalPages ?? 1);
+
+  const employees = isSearching
+    ? matchingEmployees.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : matchingEmployees;
+
+  // A new search starts from the first page of its results.
+  const setQuery = (value: string) => {
+    setQueryValue(value);
+    setPage(1);
+  };
 
   const {
     data: roles = [],
@@ -154,9 +172,6 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
   ] =
     useCreatePermissionMutation();
 
-  const [query, setQuery] =
-    useState("");
-
   const [
     savedMessage,
     setSavedMessage,
@@ -166,37 +181,6 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
     errorMessage,
     setErrorMessage,
   ] = useState("");
-
-  const filteredEmployees =
-    useMemo(() => {
-      const value =
-        query
-          .trim()
-          .toLowerCase();
-
-      if (!value) {
-        return employees;
-      }
-
-      return employees.filter(
-        (employee) =>
-          employee.name
-            .toLowerCase()
-            .includes(value) ||
-          employee.email
-            .toLowerCase()
-            .includes(value) ||
-          employee.empId
-            .toLowerCase()
-            .includes(value) ||
-          employee.role
-            .toLowerCase()
-            .includes(value)
-      );
-    }, [
-      employees,
-      query,
-    ]);
 
   const createEmployeeAccount =
     async (
@@ -354,8 +338,7 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
     };
 
   return {
-    employees:
-      filteredEmployees,
+    employees,
 
     roles,
     permissions,

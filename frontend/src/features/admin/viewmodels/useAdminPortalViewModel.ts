@@ -9,7 +9,8 @@ import {
   useEmployeeMeQuery,
   type EmployeeMeData,
 } from "../api/authApi";
-import { baseApi } from "../api/baseApi";
+import { baseApi, SESSION_EXPIRED_EVENT } from "../api/baseApi";
+import { SESSION_EXPIRED_NOTE_KEY } from "./loginViewModel";
 import { clearAuthSession } from "../authSlice";
 import { store } from "../store";
 import {
@@ -178,6 +179,19 @@ export function useAdminPortalViewModel() {
     setAdmin((current) => buildAdminProfile(employeeSession.data, current));
     setScreen((current) => (current === "login" ? "dashboard" : current));
   }, [employeeSession, accessToken]);
+
+  // The API rejected the login (it expired): back to the sign-in screen.
+  useEffect(() => {
+    const onExpired = () => {
+      // Only meaningful while signed in; the login screen reads this note.
+      if (!localStorage.getItem("train_dabba_access_token")) return;
+      sessionStorage.setItem(SESSION_EXPIRED_NOTE_KEY, "1");
+      logout();
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Only an authentication failure ends the session; a network blip does not.
   useEffect(() => {

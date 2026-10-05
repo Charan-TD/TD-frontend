@@ -6,6 +6,7 @@ import { can, type PermissionMap } from "../../admin/models/access";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { PermissionMatrixEditor } from "../components/PermissionMatrixEditor";
 import type { PermissionMatrix } from "../models/employee";
+import { describeActions, isLinkedResource, sectionDisplayName } from "../models/permissions";
 import { SidePanel } from "../../admin/components/SidePanel";
 import { ConfirmDialog } from "../../admin/components/ConfirmDialog";
 
@@ -33,6 +34,11 @@ export function AssignRoleView({
   useEffect(() => {
     setEditPermissionMatrix(vm.selectedRole?.matrix ?? {});
   }, [vm.selectedRole]);
+
+  // Linked access follows its section, so it isn't listed separately.
+  const visibleRoleAccess = Object.entries(vm.selectedRole?.matrix ?? {}).filter(
+    ([resource, actions]) => !isLinkedResource(resource) && (actions ?? []).length > 0,
+  );
 
   const createRoleBlocked = disabledReason(
     [vm.isCreatingRole, "Please wait, the role is being created"],
@@ -159,11 +165,11 @@ export function AssignRoleView({
           </div>
 
           <div className="permission-list">
-            {Object.entries(vm.selectedRole.matrix).length > 0 ? (
-              Object.entries(vm.selectedRole.matrix).map(([resource, actions]) => (
+            {visibleRoleAccess.length > 0 ? (
+              visibleRoleAccess.map(([resource, actions]) => (
                 <div className="permission-matrix-row" key={resource}>
-                  <span>{resource}</span>
-                  <small>{(actions ?? []).join(", ")}</small>
+                  <span>{sectionDisplayName(resource)}</span>
+                  <small>{describeActions(actions)}</small>
                 </div>
               ))
             ) : (

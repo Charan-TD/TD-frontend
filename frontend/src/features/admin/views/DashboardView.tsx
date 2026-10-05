@@ -3,6 +3,7 @@
 import type { Activity, Metric, PortalSection } from "../models/portal";
 import { useDashboardViewModel } from "../viewmodels/dashboardViewModel";
 import { Icon } from "../components/Icon";
+import { DataSourceBadge, SampleDataNotice } from "../components/DataSourceBadge";
 import { useGetOrdersQuery } from "../../orders/api/ordersApi";
 import { useGetRidersQuery } from "../../riders/api/ridersApi";
 import { useGetStationsQuery } from "../../stations/api/stationsApi";
@@ -37,20 +38,27 @@ export function DashboardView({ metrics, activities, access, onNavigateManagemen
   // A live card is shown only for a section this employee can read. Without this,
   // a skipped query rendered a misleading "0" card for sections they cannot access.
   const permittedLiveMetrics = liveMetrics.filter((metric) => access.includes(metric.label.toLowerCase() as PortalSection));
+  // Only these cards are connected to the API; everything else is sample data.
+  const liveLabels = new Set(permittedLiveMetrics.map((metric) => metric.label));
   const dashboardMetrics = [visibleMetrics.find((metric) => metric.label === "Users") ?? visibleMetrics[0], ...permittedLiveMetrics].filter(Boolean) as Metric[];
 
   return (
     <>
+      <SampleDataNotice />
+
       <section className="metric-grid" aria-label="Platform snapshot">
-        {dashboardMetrics.map((metric) => <article className="metric-card" key={metric.label}>
-          <div className="metric-top"><span className={`metric-icon tone-${metric.tone}`}><Icon name={metric.icon} size={18} /></span><span className="metric-trend">↗ {metric.trend.split(" ")[0]}</span></div>
-          <p>{metric.label}</p><h2>{metric.value}</h2><span className="metric-caption">{metric.trend}</span>
-        </article>)}
+        {dashboardMetrics.map((metric) => {
+          const isLive = liveLabels.has(metric.label);
+          return <article className={`metric-card${isLive ? "" : " is-sample"}`} key={metric.label}>
+            <div className="metric-top"><span className={`metric-icon tone-${metric.tone}`}><Icon name={metric.icon} size={18} /></span><DataSourceBadge kind={isLive ? "live" : "sample"} /></div>
+            <p>{metric.label}</p><h2>{metric.value}</h2><span className="metric-caption">{isLive ? metric.trend : "Real figure coming soon"}</span>
+          </article>;
+        })}
       </section>
 
       <section className="dashboard-layout dashboard-layout--primary">
         <article className="panel sales-panel">
-          <header className="panel-header"><div><h3>{access.includes("orders") ? "Operational overview" : "Role overview"}</h3><p>Information is shown according to the sections this account can access.</p></div><button type="button" className="select-button"><Icon name="calendar" size={14} /> Last 6 months <Icon name="chevron-down" size={13} /></button></header>
+          <header className="panel-header"><div><div className="panel-title-row"><h3>{access.includes("orders") ? "Operational overview" : "Role overview"}</h3><DataSourceBadge kind="sample" /></div><p>Information is shown according to the sections this account can access.</p></div><button type="button" className="select-button"><Icon name="calendar" size={14} /> Last 6 months <Icon name="chevron-down" size={13} /></button></header>
           <div className="trend-header"><div className="trend-switch" role="tablist" aria-label="Sales metric"><button type="button" role="tab" aria-selected={trendMode === "revenue"} className={trendMode === "revenue" ? "is-active" : ""} onClick={() => setTrendMode("revenue")}><i /> Revenue</button><button type="button" role="tab" aria-selected={trendMode === "orders"} className={trendMode === "orders" ? "is-active" : ""} onClick={() => setTrendMode("orders")}><i /> Orders</button></div><div className="trend-highlight"><strong>{trendMode === "revenue" ? selected.revenue : selected.orders}</strong><span>{selected.month} · {trendMode === "revenue" ? "gross sales" : "completed orders"}</span></div></div>
           <div className={`trend-chart trend-chart--${trendMode}`} role="img" aria-label={`${trendMode} trend from April to September`}>
             <svg viewBox="0 0 680 235" preserveAspectRatio="none" aria-hidden="true">
@@ -65,7 +73,7 @@ export function DashboardView({ metrics, activities, access, onNavigateManagemen
         </article>
 
         <article className="panel health-panel">
-          <header className="panel-header"><div><h3>Today at a glance</h3><p>Items that need an admin decision</p></div></header>
+          <header className="panel-header"><div><div className="panel-title-row"><h3>Today at a glance</h3><DataSourceBadge kind="sample" /></div><p>Items that need an admin decision</p></div></header>
           <div className="health-list">
             <div className="health-row"><span>Orders completed</span><strong>1,248</strong><b className="positive">98.2%</b></div>
             <div className="health-row"><span>Pending approvals</span><strong>12</strong><b className="warning">Review</b></div>
@@ -77,11 +85,11 @@ export function DashboardView({ metrics, activities, access, onNavigateManagemen
 
       <section className="dashboard-layout dashboard-layout--secondary">
         <article className="panel activity-panel">
-          <header className="panel-header"><div><h3>Recent activity</h3><p>Latest changes across your platform</p></div><button type="button" className="text-button">View all</button></header>
+          <header className="panel-header"><div><div className="panel-title-row"><h3>Recent activity</h3><DataSourceBadge kind="sample" /></div><p>Latest changes across your platform</p></div><button type="button" className="text-button">View all</button></header>
           <div className="activity-list">{activities.map((item) => <div className="activity-row" key={item.title}><span className={`activity-avatar tone-${item.tone}`}>{item.initials}</span><div><strong>{item.title}</strong><p>{item.detail}</p></div><time>{item.time}</time></div>)}</div>
         </article>
         <article className="panel attention-panel">
-          <header className="panel-header"><div><h3>Needs attention</h3><p>A few things to clear today</p></div><span className="attention-count">12</span></header>
+          <header className="panel-header"><div><div className="panel-title-row"><h3>Needs attention</h3><DataSourceBadge kind="sample" /></div><p>A few things to clear today</p></div><span className="attention-count">12</span></header>
           <div className="attention-list">
             <div className="attention-row"><span className="attention-icon attention-icon--orange"><Icon name="store" size={16} /></span><div><strong>5 kitchen approvals</strong><p>Applications are ready to review</p></div><button type="button">Review</button></div>
             <div className="attention-row"><span className="attention-icon attention-icon--indigo"><Icon name="rider" size={16} /></span><div><strong>7 rider documents</strong><p>Verification is waiting</p></div><button type="button">Review</button></div>

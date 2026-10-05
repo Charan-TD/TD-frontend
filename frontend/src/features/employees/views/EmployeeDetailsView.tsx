@@ -30,6 +30,7 @@ export function EmployeeDetailsView({
   const canAssignRole = can(permissions, "employee_roles", "insert");
   const canRemoveRole = can(permissions, "employee_roles", "delete");
   const canUpdateRole = can(permissions, "roles", "update");
+  const canRestoreRole = can(permissions, "employee_roles", "update");
 
   // Edit employee details
   const [showEditDetails, setShowEditDetails] = useState(false);
@@ -94,7 +95,12 @@ export function EmployeeDetailsView({
   }
 
   const assignedRoleIds = new Set(employee.roleIds);
+  // Removed roles can be restored from their own row, so they aren't offered here.
   const assignableRoles = vm.roles.filter((role) => !assignedRoleIds.has(role.id));
+  const orderedRoles = [...employee.roles].sort(
+    (a, b) => Number(a.status === "Inactive") - Number(b.status === "Inactive"),
+  );
+  const activeRoleCount = employee.roles.filter((role) => role.status === "Active").length;
 
   const saveDetailsBlocked = disabledReason(
     [vm.isUpdatingEmployee, "Please wait, changes are being saved"],
@@ -156,7 +162,7 @@ export function EmployeeDetailsView({
 
       <div className="employee-detail-grid">
         <article>
-          <span>{employee.roles.length > 1 ? "Roles" : "Role"}</span>
+          <span>{activeRoleCount > 1 ? "Roles" : "Role"}</span>
           <strong>{employee.role}</strong>
         </article>
         <article>
@@ -179,11 +185,30 @@ export function EmployeeDetailsView({
       <div className="employee-permissions">
         <h3>Assigned roles</h3>
         <div className="permission-matrix-readout">
-          {employee.roles.map((role) => (
+          {orderedRoles.map((role) => role.status === "Inactive" ? (
+            <div className="permission-matrix-row is-removed" key={role.assignmentId}>
+              <div>
+                <strong>{role.name}</strong>
+                <span className="role-removed-pill">Removed</span>
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  className="table-action"
+                  type="button"
+                  onClick={() => vm.restoreRole(role.assignmentId)}
+                  disabled={!canRestoreRole || vm.isRestoringRole}
+                  data-tooltip={!canRestoreRole ? noAccess("give removed roles back") : vm.isRestoringRole ? "Please wait, the role is being restored" : "Give this role back to the employee"}
+                  data-tooltip-kind={canRestoreRole ? undefined : "access"}
+                  data-tooltip-icon={canRestoreRole ? "check" : undefined}
+                >
+                  {vm.isRestoringRole ? "Restoring..." : "Restore"}
+                </button>
+              </div>
+            </div>
+          ) : (
             <div className="permission-matrix-row" key={role.assignmentId}>
               <div>
                 <strong>{role.name}</strong>
-                {role.status === "Inactive" && <small> (inactive)</small>}
               </div>
               <div style={{ display: "flex", gap: 4 }}>
                 <button
@@ -209,7 +234,7 @@ export function EmployeeDetailsView({
               </div>
             </div>
           ))}
-          {employee.roles.length === 0 && <div className="api-state">No roles assigned.</div>}
+          {activeRoleCount === 0 && <div className="api-state">No active roles. Add one below{orderedRoles.length ? " or restore a removed one" : ""}.</div>}
         </div>
 
         {assignableRoles.length > 0 && (

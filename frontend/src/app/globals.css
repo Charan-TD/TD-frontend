@@ -5649,3 +5649,145 @@ img.avatar {
 @media (prefers-reduced-motion: reduce) {
   .app-tooltip { animation: none; }
 }
+
+/* Password input with a show / hide eye button (create employee form) */
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.form-grid .password-field input {
+  padding-right: 40px;
+}
+
+.password-field__toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  color: #9ba1b2;
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.password-field__toggle:hover,
+.password-field__toggle[aria-pressed="true"] {
+  color: var(--orange-deep);
+  background: var(--orange-wash);
+}
+
+/* Removed (inactive) role assignment on the employee details page */
+.permission-matrix-row.is-removed strong {
+  color: #9aa0a3;
+  text-decoration: line-through;
+}
+
+.role-removed-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f2ef;
+  color: #7c837e;
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* ==========================================================
+ * Live / Sample data badges (DataSourceBadge) and the notice
+ * explaining them on preview screens.
+ * ========================================================== */
+.data-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.data-badge--live {
+  color: #1d7a55;
+  background: var(--mint-wash);
+}
+
+.data-badge--live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 3px rgba(42, 168, 118, .18);
+}
+
+.data-badge--sample {
+  color: var(--saffron-deep);
+  background: var(--saffron-wash);
+  border: 1px dashed rgba(199, 124, 22, .45);
+}
+
+.panel-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.metric-card.is-sample h2 {
+  color: #8d93a6;
+}
+
+.sample-data-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 13px 16px;
+  border: 1px dashed rgba(199, 124, 22, .45);
+  border-radius: 14px;
+  background: var(--saffron-wash);
+}
+
+.sample-data-notice__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--saffron-deep);
+}
+
+.sample-data-notice strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.sample-data-notice p {
+  margin-top: 4px;
+  color: #6b6455;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.sample-data-notice p .data-badge {
+  height: 19px;
+  padding: 0 7px;
+  font-size: 9px;
+}

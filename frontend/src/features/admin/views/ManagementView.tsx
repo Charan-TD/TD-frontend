@@ -10,6 +10,7 @@ import { ComingSoonPanel } from "../components/ComingSoonPanel";
 import { UserAvatar } from "../components/UserAvatar";
 import { SkeletonTable } from "../components/Skeleton";
 import { noAccess } from "../models/disabledReason";
+import { DataSourceBadge } from "../components/DataSourceBadge";
 
 import {
   isUserBlocked,
@@ -163,9 +164,7 @@ function UsersWorkspace({
             </p>
           </div>
 
-          <span className="activity-live-pill">
-            <i />
-          </span>
+          <DataSourceBadge kind="sample" />
         </header>
 
         <div className="user-activity-grid">

@@ -1,0 +1,16 @@
+# Netlify build settings for the Train Dabba admin portal.
+# The repo also contains the backend, so Netlify builds only frontend/.
+# Netlify detects Next.js and adds its Next.js runtime automatically.
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Next.js 16 needs Node 20.9 or newer.
+  NODE_VERSION = "22"
+  # NEXT_PUBLIC_API_BASE_URL is set in Netlify's site settings
+  # (Site configuration > Environment variables), not here, so each
+  # environment can point at its own backend. Without it the app falls
+  # back to the Railway dev API.
