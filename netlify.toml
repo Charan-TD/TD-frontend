@@ -1,11 +1,12 @@
 # Netlify build settings for the Train Dabba admin portal.
 # The repo also contains the backend, so Netlify builds only frontend/.
-# Netlify detects Next.js and adds its Next.js runtime automatically.
+# The app is exported as static files (out/), so no server is needed.
 
 [build]
   base = "frontend"
   command = "npm run build"
-  publish = ".next"
+  # Static export (next.config.ts sets output: "export").
+  publish = "out"
 
 [build.environment]
   # Next.js 16 needs Node 20.9 or newer.
