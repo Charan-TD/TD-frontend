@@ -6,7 +6,9 @@ export type PortalSection =
   | "riders"
   | "orders"
   | "stations"
-  | "sales";
+  | "sales"
+  | "marketing"
+  | "reports";
 
 export const PORTAL_SECTIONS: Array<{
   id: PortalSection;
@@ -58,6 +60,18 @@ export const PORTAL_SECTIONS: Array<{
       label: "Sales",
       description:
         "View sales and payment operations",
+    },
+    {
+      id: "marketing",
+      label: "Marketing",
+      description:
+        "Manage offers, coupons and campaigns",
+    },
+    {
+      id: "reports",
+      label: "Reports",
+      description:
+        "View sales, order, user and operational reports",
     },
   ];
 

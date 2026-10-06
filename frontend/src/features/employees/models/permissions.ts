@@ -149,6 +149,8 @@ export function normalizePermissionMatrix(
     "orders",
     "stations",
     "sales",
+    "marketing",
+    "reports",
   ];
 
   permissions.forEach((permission) => {

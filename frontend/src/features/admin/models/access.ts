@@ -11,6 +11,8 @@ export const PORTAL_SECTIONS: PortalSection[] = [
   "restaurants",
   "orders",
   "sales",
+  "marketing",
+  "reports",
   "employees",
   "stations",
 ];

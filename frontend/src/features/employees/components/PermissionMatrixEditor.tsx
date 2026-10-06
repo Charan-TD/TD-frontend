@@ -4,6 +4,9 @@ import { useMemo, useState } from "react";
 
 import { Icon } from "../../admin/components/Icon";
 import { SidePanel } from "../../admin/components/SidePanel";
+import { noAccess } from "../../admin/models/disabledReason";
+import { useCreatePermissionMutation } from "../api/rolesApi";
+import { getErrorMessage } from "../viewmodels/assignRoleViewModel";
 import {
   PORTAL_SECTIONS,
   type AdminPermissionCode,
@@ -31,6 +34,12 @@ type Props = {
   permissions: DbPermission[];
   onChange: (matrix: PermissionMatrix) => void;
   disabled?: boolean;
+  /**
+   * Whether the signed-in person may add permission rows. Sections the app
+   * knows about but the database doesn't have yet (e.g. a new Marketing
+   * section) can then be set up straight from the editor.
+   */
+  canSetUpSections?: boolean;
 };
 
 export function PermissionMatrixEditor({
@@ -38,8 +47,36 @@ export function PermissionMatrixEditor({
   permissions,
   onChange,
   disabled = false,
+  canSetUpSections = false,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [createPermission] = useCreatePermissionMutation();
+  const [settingUp, setSettingUp] = useState<string | null>(null);
+  const [setUpError, setSetUpError] = useState("");
+
+  // App sections with no permission row in the database yet, so no role can
+  // be given access to them until they are set up.
+  const sectionsNotSetUp = useMemo(() => {
+    const existing = new Set(
+      permissions.map((permission) => permission.permission_name.trim().toLowerCase()),
+    );
+    return PORTAL_SECTIONS.filter(
+      (section) => !existing.has(section.id) && !isPausedSection(section.id),
+    );
+  }, [permissions]);
+
+  const setUpSection = async (sectionId: string) => {
+    setSetUpError("");
+    setSettingUp(sectionId);
+    try {
+      // The new row appears in the list above once permissions reload.
+      await createPermission({ permissionName: sectionId }).unwrap();
+    } catch (error) {
+      setSetUpError(getErrorMessage(error));
+    } finally {
+      setSettingUp(null);
+    }
+  };
 
   const rows = useMemo(() => {
     const portalMeta = new Map(PORTAL_SECTIONS.map((item) => [item.id, item]));
@@ -229,6 +266,50 @@ export function PermissionMatrixEditor({
             <div className="api-state">No sections are available to set up yet.</div>
           )}
         </div>
+
+        {!disabled && sectionsNotSetUp.length > 0 && (
+          <div className="matrix-not-set-up">
+            <div className="matrix-not-set-up__header">
+              <strong>Not set up yet</strong>
+              <p>
+                These sections exist in the portal but can't be given to a role until
+                they are set up. Setting one up makes it available for every role.
+              </p>
+            </div>
+
+            {setUpError && <div className="api-state api-state--error">{setUpError}</div>}
+
+            {sectionsNotSetUp.map((section) => {
+              const isPending = settingUp === section.id;
+              return (
+                <div key={section.id} className="matrix-not-set-up__row">
+                  <span>
+                    <strong>{section.label}</strong>
+                    <small>{section.description}</small>
+                  </span>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setUpSection(section.id)}
+                    disabled={!canSetUpSections || settingUp !== null}
+                    data-tooltip={
+                      !canSetUpSections
+                        ? noAccess("set up new sections")
+                        : settingUp !== null
+                          ? "Please wait, a section is being set up"
+                          : `Make ${section.label} available to give to roles`
+                    }
+                    data-tooltip-kind={canSetUpSections ? undefined : "access"}
+                    data-tooltip-icon={canSetUpSections ? "plus" : undefined}
+                  >
+                    <Icon name="plus" size={13} />
+                    {isPending ? "Setting up..." : "Set up"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </SidePanel>
     </div>
   );

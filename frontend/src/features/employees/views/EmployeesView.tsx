@@ -684,6 +684,7 @@ export function EmployeesView({
                   </p>
 
                   <PermissionMatrixEditor
+                    canSetUpSections={canCreatePermission}
                     value={
                       selectedRole.matrix
                     }
@@ -749,6 +750,7 @@ export function EmployeesView({
               </p>
 
               <PermissionMatrixEditor
+                canSetUpSections={canCreatePermission}
                 value={permissionMatrix}
                 permissions={vm.permissions}
                 onChange={setPermissionMatrix}

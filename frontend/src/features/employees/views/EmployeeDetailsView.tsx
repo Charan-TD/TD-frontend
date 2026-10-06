@@ -345,6 +345,7 @@ export function EmployeeDetailsView({
           </label>
         </div>
         <PermissionMatrixEditor
+          canSetUpSections={can(permissions, "permissions", "insert")}
           value={roleMatrix}
           permissions={vm.permissions}
           onChange={setRoleMatrix}

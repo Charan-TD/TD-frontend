@@ -219,6 +219,7 @@ export function AssignRoleView({
         </div>
 
         <PermissionMatrixEditor
+          canSetUpSections={can(permissions, "permissions", "insert")}
           value={newRoleMatrix}
           permissions={vm.permissions}
           onChange={setNewRoleMatrix}
@@ -274,6 +275,7 @@ export function AssignRoleView({
         {vm.selectedRole && (
           <>
             <PermissionMatrixEditor
+              canSetUpSections={can(permissions, "permissions", "insert")}
               value={editPermissionMatrix}
               permissions={vm.permissions}
               onChange={setEditPermissionMatrix}
