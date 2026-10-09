@@ -31,7 +31,7 @@ export function App() {
   if (vm.screen === "edit-profile") return <EditProfileView admin={vm.admin} savedMessage={vm.savedMessage} onBack={() => vm.navigate("profile")} onSave={vm.saveProfile} />;
 
   const shellProps = {
-    screen: vm.screen, admin: vm.admin, noticeOpen: vm.noticeOpen, managementServices: vm.data.modules,
+    screen: vm.screen, admin: vm.admin, noticeOpen: vm.noticeOpen,
     selectedManagementId: vm.selectedManagementId, selectedSubsection: vm.selectedSubsection, managementOpen: vm.managementOpen,
     onNavigate: vm.navigate, onSelectManagement: vm.selectManagementService,
     onToggleManagement: () => vm.setManagementOpen(!vm.managementOpen), onToggleNotice: () => vm.setNoticeOpen(!vm.noticeOpen),
@@ -45,8 +45,8 @@ export function App() {
 
   const copy = pageCopy[vm.screen];
   return <AppShell title={copy.title} subtitle={copy.subtitle} {...shellProps}>
-    {vm.screen === "dashboard" && <DashboardView metrics={vm.data.metrics} activities={vm.data.activities} access={vm.admin.access} onNavigateManagement={() => vm.navigate("management")} />}
-    {vm.screen === "management" && <ManagementView modules={vm.data.modules} userActivities={vm.data.userActivities} selectedServiceId={vm.selectedManagementId} selectedSubsection={vm.selectedSubsection} onSelectService={vm.selectManagementService} canUpdateUsers={can(vm.admin.permissions, "users", "update")} />}
+    {vm.screen === "dashboard" && <DashboardView access={vm.admin.access} onNavigateManagement={() => vm.navigate("management")} />}
+    {vm.screen === "management" && <ManagementView selectedSubsection={vm.selectedSubsection} canUpdateUsers={can(vm.admin.permissions, "users", "update")} />}
     {vm.screen === "profile" && <ProfileView admin={vm.admin} onEdit={() => vm.navigate("edit-profile")} />}
   </AppShell>;
 }

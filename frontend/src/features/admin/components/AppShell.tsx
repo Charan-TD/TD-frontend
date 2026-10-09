@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AdminProfile, Module, PortalSection, Screen } from "../models/portal";
+import type { AdminProfile, PortalSection, Screen } from "../models/portal";
 import type { NavigationSectionId } from "../models/navigation";
 import { navigationGroups, navigationSections, navigationSubsections } from "../models/navigation";
 import { missingPermissions } from "../models/access";
@@ -16,7 +16,7 @@ import { useGetEmployeesQuery } from "../../employees/api/adminUsersApi";
 
 type Props = {
   title: string; subtitle: string; screen: Screen; admin: AdminProfile; noticeOpen: boolean;
-  managementServices: Module[]; selectedManagementId: string; managementOpen: boolean;
+  selectedManagementId: string; managementOpen: boolean;
   selectedSubsection: string; onNavigate: (screen: Screen) => void;
   onSelectManagement: (serviceId: string, subsectionId?: string) => void;
   onToggleManagement: () => void; onToggleNotice: () => void; onQuickAddEmployee: () => void; children: ReactNode;
@@ -56,7 +56,7 @@ function QuickAction({ label, task, icon, missing, enabledTitle, attention = fal
 const screenToSection: Partial<Record<Screen, NavigationSectionId>> = { dashboard: "dashboard", management: "users", employees: "employees", "employee-details": "employees", "assign-role": "employees", "employee-activity": "employees" };
 const screenToEmployeeSubsection: Partial<Record<Screen, string>> = { employees: "employees-all", "employee-details": "employees-all", "assign-role": "employees-roles", "employee-activity": "employees-activity" };
 
-export function AppShell({ title, subtitle, screen, admin, noticeOpen, managementServices, selectedManagementId, managementOpen, selectedSubsection, onNavigate, onSelectManagement, onToggleManagement, onToggleNotice, onQuickAddEmployee, children }: Props) {
+export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedManagementId, managementOpen, selectedSubsection, onNavigate, onSelectManagement, onToggleManagement, onToggleNotice, onQuickAddEmployee, children }: Props) {
   const sidebarVm = useSidebarViewModel(screenToSection[screen] ?? "dashboard");
   const allowed = new Set<PortalSection>(admin.access);
   const sections = navigationSections.filter((item) => allowed.has(item.section));
@@ -260,7 +260,7 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, managemen
             <QuickAction label="Create Offer" task="create offers" icon="megaphone" primary missing={missingCreateOffer} onRun={() => navigateManagementShortcut("marketing", "marketing-offers")} enabledTitle="Create a new offer for customers" />
           </div>
 
-          <div className="notification-wrap"><button className="icon-button" type="button" aria-label="Notifications" onClick={onToggleNotice}><Icon name="bell" /><span className="notification-dot" /></button>{noticeOpen && <div className="notification-popover"><strong>3 items need attention</strong><span>Approvals and complaints are waiting for review.</span></div>}</div>
+          <div className="notification-wrap"><button className="icon-button" type="button" aria-label="Notifications" onClick={onToggleNotice}><Icon name="bell" /></button>{noticeOpen && <div className="notification-popover"><strong>No notifications</strong><span>You’re all caught up.</span></div>}</div>
 
           <div className="topbar-profile" ref={profileRef}>
             <button type="button" className="topbar-profile-trigger" aria-label="Open my profile" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>

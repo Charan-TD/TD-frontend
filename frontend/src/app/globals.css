@@ -5700,98 +5700,6 @@ img.avatar {
   vertical-align: middle;
 }
 
-/* ==========================================================
- * Live / Sample data badges (DataSourceBadge) and the notice
- * explaining them on preview screens.
- * ========================================================== */
-.data-badge {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 5px;
-  height: 22px;
-  padding: 0 9px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  vertical-align: middle;
-  cursor: help;
-}
-
-.data-badge--live {
-  color: #1d7a55;
-  background: var(--mint-wash);
-}
-
-.data-badge--live i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--mint);
-  box-shadow: 0 0 0 3px rgba(42, 168, 118, .18);
-}
-
-.data-badge--sample {
-  color: var(--saffron-deep);
-  background: var(--saffron-wash);
-  border: 1px dashed rgba(199, 124, 22, .45);
-}
-
-.panel-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.metric-card.is-sample h2 {
-  color: #8d93a6;
-}
-
-.sample-data-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 18px;
-  padding: 13px 16px;
-  border: 1px dashed rgba(199, 124, 22, .45);
-  border-radius: 14px;
-  background: var(--saffron-wash);
-}
-
-.sample-data-notice__icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: #fff;
-  color: var(--saffron-deep);
-}
-
-.sample-data-notice strong {
-  display: block;
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.sample-data-notice p {
-  margin-top: 4px;
-  color: #6b6455;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.sample-data-notice p .data-badge {
-  height: 19px;
-  padding: 0 7px;
-  font-size: 9px;
-}
-
 /* Role editor: app sections with no permission row in the database yet */
 .matrix-not-set-up {
   display: grid;
@@ -5845,4 +5753,29 @@ img.avatar {
   flex: none;
   align-items: center;
   gap: 5px;
+}
+
+/* Dashboard chart while its data is not connected: grid lines plus a message. */
+.trend-chart--empty {
+  position: relative;
+}
+
+.trend-chart--empty svg {
+  width: 100%;
+  height: 100%;
+}
+
+.trend-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #8d93a6;
+  font-size: 13px;
+}
+
+/* Edge adds its own password-reveal eye; the login form already has one. */
+.input-wrap input::-ms-reveal,
+.input-wrap input::-ms-clear {
+  display: none;
 }

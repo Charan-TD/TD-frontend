@@ -30,25 +30,20 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
 
           <div className="story-stats">
             <div>
-              <strong>12.8K</strong>
+              <strong>—</strong>
               <span>Happy customers</span>
             </div>
 
             <div>
-              <strong>48</strong>
-              <span>Resturants</span>
+              <strong>—</strong>
+              <span>Restaurants</span>
             </div>
 
             <div>
-              <strong>98.2%</strong>
+              <strong>—</strong>
               <span>Order success</span>
             </div>
           </div>
-        </div>
-
-        <div className="story-footer">
-          <span className="story-pulse" />
-          Live platform monitoring
         </div>
       </section>
 

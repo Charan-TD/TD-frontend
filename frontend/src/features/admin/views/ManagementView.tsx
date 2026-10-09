@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import type { Module, UserActivity } from "../models/portal";
 import type { CustomerUser } from "../models/customerUser";
 
 import { Icon } from "../components/Icon";
@@ -10,7 +9,6 @@ import { ComingSoonPanel } from "../components/ComingSoonPanel";
 import { UserAvatar } from "../components/UserAvatar";
 import { SkeletonTable } from "../components/Skeleton";
 import { noAccess } from "../models/disabledReason";
-import { DataSourceBadge } from "../components/DataSourceBadge";
 
 import {
   isUserBlocked,
@@ -24,27 +22,15 @@ import { useGetOrdersQuery } from "../../orders/api/ordersApi";
 import { useGetStationsQuery } from "../../stations/api/stationsApi";
 
 type Props = {
-  modules: Module[];
-  userActivities: UserActivity[];
-  selectedServiceId: string;
   selectedSubsection: string;
-  onSelectService: (id: string, subsectionId?: string) => void;
   /** Whether the signed-in person may block / unblock users. */
   canUpdateUsers: boolean;
 };
 
 export function ManagementView({
-  modules,
-  userActivities,
-  selectedServiceId,
   selectedSubsection,
-  onSelectService,
   canUpdateUsers,
 }: Props) {
-  const activeModule =
-    modules.find((module) => module.id === selectedServiceId) ??
-    modules[0];
-
   const section =
     selectedSubsection.split("-")[0] || "users";
 
@@ -52,7 +38,6 @@ export function ManagementView({
     return (
       <UsersWorkspace
         subsection={selectedSubsection as UserWorkspaceMap}
-        userActivities={userActivities}
         canUpdateUsers={canUpdateUsers}
       />
     );
@@ -117,15 +102,22 @@ export function ManagementView({
   return (
     <section className="management-hero">
       <div>
-        <h2>{activeModule?.title ?? "Management"}</h2>
-        <p>
-          {activeModule?.description ??
-            "Operational workspace"}
-        </p>
+        <h2>Management</h2>
+        <p>Operational workspace</p>
       </div>
     </section>
   );
 }
+
+// User activity has no API yet, so these cards show "—" instead of a number.
+const userActivityCards = [
+  { id: "active", label: "Currently active users", description: "Users active on the platform right now", icon: "users", tone: "saffron" },
+  { id: "searching", label: "Searching for food", description: "Users browsing kitchens and food items", icon: "search", tone: "orange" },
+  { id: "payment", label: "At payment stage", description: "Orders waiting for payment completion", icon: "wallet", tone: "violet" },
+  { id: "waiting", label: "Waiting for order", description: "Successful orders awaiting delivery", icon: "bag", tone: "indigo" },
+  { id: "cancelled", label: "Cancelled orders", description: "Orders cancelled by users or system", icon: "chart", tone: "slate" },
+  { id: "successful", label: "Successful orders", description: "Orders completed successfully today", icon: "check", tone: "mint" },
+] as const;
 
 type UserWorkspaceMap =
   | "users-all"
@@ -135,11 +127,9 @@ type UserWorkspaceMap =
 
 function UsersWorkspace({
   subsection,
-  userActivities,
   canUpdateUsers,
 }: {
   subsection: UserWorkspaceMap;
-  userActivities: UserActivity[];
   canUpdateUsers: boolean;
 }) {
   if (subsection === "users-complaints") {
@@ -163,12 +153,10 @@ function UsersWorkspace({
               journey right now.
             </p>
           </div>
-
-          <DataSourceBadge kind="sample" />
         </header>
 
         <div className="user-activity-grid">
-          {userActivities.map((activity) => (
+          {userActivityCards.map((activity) => (
             <article
               className={`user-activity-card user-activity-card--${activity.tone}`}
               key={activity.id}
@@ -182,12 +170,10 @@ function UsersWorkspace({
                     size={19}
                   />
                 </span>
-
-                <span className="activity-status-dot" />
               </div>
 
               <p>{activity.label}</p>
-              <strong>{activity.value}</strong>
+              <strong>—</strong>
               <small>{activity.description}</small>
             </article>
           ))}
@@ -1021,13 +1007,6 @@ function RestaurantList({
           </strong>
           <span>Restaurants</span>
         </div>
-
-        <div>
-          <strong>
-            {error ? "Error" : "Live"}
-          </strong>
-          <span>API status</span>
-        </div>
       </div>
 
       {error && (
@@ -1143,13 +1122,6 @@ function OperationalWorkspace({
             {loading ? "…" : rows.length}
           </strong>
           <span>Items in this view</span>
-        </div>
-
-        <div>
-          <strong>
-            {error ? "Error" : "Live"}
-          </strong>
-          <span>API status</span>
         </div>
       </div>
 

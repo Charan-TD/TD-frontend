@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { skipToken } from "@reduxjs/toolkit/query";
 
 import type { AdminProfile, Screen } from "../models/portal";
@@ -90,7 +90,6 @@ function buildAdminProfile(
     phone: sameEmployee ? previous!.phone : "",
     location: sameEmployee ? previous!.location : "",
     role: roleName ?? (sameEmployee ? previous?.role : undefined) ?? "Employee",
-    lastLogin: "Today",
     access: sectionsWithRead(permissions),
     permissions,
   };
@@ -103,8 +102,6 @@ export function useAdminPortalViewModel() {
     adminPortalService.getAdmin(),
   );
 
-  const [menuQuery, setMenuQuery] = useState("");
-  const [menuCategory, setMenuCategory] = useState("All items");
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
   const [managementOpen, setManagementOpen] = useState(true);
@@ -202,30 +199,6 @@ export function useAdminPortalViewModel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, isSessionError, sessionError]);
 
-  const data = useMemo(
-    () => ({
-      metrics: adminPortalService.getMetrics(),
-      modules: adminPortalService.getModules(),
-      menu: adminPortalService.getMenu(),
-      activities: adminPortalService.getActivities(),
-      userActivities: adminPortalService.getUserActivities(),
-    }),
-    [],
-  );
-
-  const filteredMenu = data.menu.filter((item) => {
-    const matchesCategory =
-      menuCategory === "All items" || item.category === menuCategory;
-
-    const needle = menuQuery.toLowerCase();
-
-    return (
-      matchesCategory &&
-      (item.name.toLowerCase().includes(needle) ||
-        item.kitchen.toLowerCase().includes(needle))
-    );
-  });
-
   const navigate = (next: Screen) => {
     // "login" is the sign-out destination: it must wipe the session, not just
     // swap the screen (the old behaviour left the previous user's token,
@@ -306,10 +279,6 @@ export function useAdminPortalViewModel() {
   return {
     screen,
     admin,
-    data,
-    filteredMenu,
-    menuQuery,
-    menuCategory,
     noticeOpen,
     savedMessage,
     managementOpen,
@@ -324,8 +293,6 @@ export function useAdminPortalViewModel() {
     selectManagementService,
     selectEmployee,
     setSelectedEmployeeId,
-    setMenuQuery,
-    setMenuCategory,
     setNoticeOpen,
     setManagementOpen,
     triggerQuickAction,
