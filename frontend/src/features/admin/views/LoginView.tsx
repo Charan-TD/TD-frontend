@@ -1,12 +1,16 @@
 "use client";
 
+import { useState } from "react";
+
 import { Brand } from "../components/Brand";
 import { Icon } from "../components/Icon";
 import type { EmployeeLoginData } from "../api/authApi";
 import { useLoginViewModel } from "../viewmodels/loginViewModel";
+import { ForgotPasswordView } from "./ForgotPasswordView";
 
 export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData) => void }) {
   const vm = useLoginViewModel(onSignIn);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   return (
     <main className="login-screen">
@@ -53,6 +57,13 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
             <Brand compact />
           </div>
 
+          {forgotOpen ? (
+            <ForgotPasswordView
+              initialEmail={vm.email}
+              onBackToSignIn={() => setForgotOpen(false)}
+            />
+          ) : (
+          <>
           <span className="eyebrow">WELCOME BACK</span>
 
           <h2>Sign in to admin</h2>
@@ -73,9 +84,11 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
               <span className="input-wrap">
                 <input
                   type="email"
+                  placeholder="you@company.com"
                   value={vm.email}
                   onChange={(event) => vm.setEmail(event.target.value)}
                   required
+                  autoComplete="username"
                   disabled={vm.isSubmitting}
                 />
 
@@ -89,6 +102,7 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
               <span className="input-wrap">
                 <input
                   type={vm.passwordVisible ? "text" : "password"}
+                  placeholder="Enter your password"
                   value={vm.password}
                   onChange={(event) => vm.setPassword(event.target.value)}
                   required
@@ -117,17 +131,27 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
 
             <div className="login-options">
               <label className="check-label">
-                <input type="checkbox" defaultChecked />
+                <input
+                  type="checkbox"
+                  checked={vm.rememberMe}
+                  onChange={(event) => vm.setRememberMe(event.target.checked)}
+                  disabled={vm.isSubmitting}
+                />
                 <span>Remember me</span>
               </label>
 
-              <button type="button" className="text-button">
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setForgotOpen(true)}
+                disabled={vm.isSubmitting}
+              >
                 Forgot password?
               </button>
             </div>
 
             {vm.errorMessage && (
-              <div className="api-state api-state--error">
+              <div className="api-state api-state--error" role="alert">
                 {vm.errorMessage}
               </div>
             )}
@@ -149,6 +173,8 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
               )}
             </button>
           </form>
+          </>
+          )}
 
           <p className="login-secure">
             <Icon name="shield" size={14} />

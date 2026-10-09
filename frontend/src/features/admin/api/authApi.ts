@@ -51,6 +51,19 @@ export const authApi = baseApi.injectEndpoints({
             }),
         }),
 
+        // Always answers with the same message, whether or not the email
+        // belongs to an employee, so it cannot be used to discover accounts.
+        forgotEmployeePassword: builder.mutation<
+            { success: boolean; message: string },
+            { email: string }
+        >({
+            query: (body) => ({
+                url: "/auth/employee/forgot-password",
+                method: "POST",
+                body,
+            }),
+        }),
+
         // The argument is the access token. It is never sent in the URL - the
         // Authorization header does that - it only makes the cache entry
         // per-session, so one employee's cached profile can never be served
@@ -67,4 +80,5 @@ export const authApi = baseApi.injectEndpoints({
 export const {
     useEmployeeLoginMutation,
     useEmployeeMeQuery,
+    useForgotEmployeePasswordMutation,
 } = authApi;

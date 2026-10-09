@@ -8,6 +8,11 @@ import type { EmployeeLoginData } from "../api/authApi";
 import { setAuthSession } from "../authSlice";
 import { store } from "../store";
 import { normalizePermissionMap } from "../models/access";
+import {
+  clearRememberedEmail,
+  getRememberedEmail,
+  saveRememberedEmail,
+} from "../services/rememberedEmail";
 
 /** sessionStorage flag set when the portal signs someone out because their login expired. */
 export const SESSION_EXPIRED_NOTE_KEY = "train_dabba_session_expired";
@@ -17,6 +22,16 @@ export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Pre-fill the email saved by "Remember me" (read after mounting so the
+  // server-rendered page and the browser agree).
+  useEffect(() => {
+    const remembered = getRememberedEmail();
+    if (!remembered) return;
+    setEmail(remembered);
+    setRememberMe(true);
+  }, []);
 
   // Explains why the person is back here if their login expired. Read after
   // mounting so the server-rendered page and the browser agree.
@@ -80,6 +95,9 @@ export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void
         JSON.stringify(normalizedPermissions),
       );
 
+      if (rememberMe) saveRememberedEmail(email.trim());
+      else clearRememberedEmail();
+
       // Reset RTK Query cache to clear any leftover `isError` states from previous failed sessions
       store.dispatch(baseApi.util.resetApiState());
 
@@ -99,10 +117,12 @@ export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void
     email,
     password,
     passwordVisible,
+    rememberMe,
     errorMessage,
     isSubmitting,
     setEmail,
     setPassword,
+    setRememberMe,
     togglePasswordVisibility: () =>
       setPasswordVisible((value) => !value),
     submit,
