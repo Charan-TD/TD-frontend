@@ -13,6 +13,7 @@ export type RestaurantList = {
 };
 
 export const restaurantsApi = baseApi.injectEndpoints({
+  overrideExisting: true,
   endpoints: (builder) => ({
     getRestaurants: builder.query<Restaurant[], { page?: number; limit?: number; status?: string } | void>({
       query: (arg) => ({
@@ -24,7 +25,24 @@ export const restaurantsApi = baseApi.injectEndpoints({
           ...(arg?.status ? { status: arg.status } : {}),
         },
       }),
-      transformResponse: (response: { success: boolean; data: RestaurantList }) => response.data?.restaurants ?? [],
+      transformResponse: (response: { success: boolean; data: unknown }) => {
+        // The deployed backend has changed shape before (name -> rest_name), so
+        // accept the known envelope and field spellings.
+        const data = response.data as Record<string, unknown> | unknown[] | undefined;
+        const rows = (Array.isArray(data)
+          ? data
+          : (data?.restaurants ?? data?.rows ?? data?.items ?? [])) as Record<string, unknown>[];
+
+        if (rows.length === 0) {
+          console.warn("GET /restaurants returned no restaurants. Raw response:", response);
+        }
+
+        return rows.map((row) => ({
+          id: String(row.id ?? row.restaurant_id ?? ""),
+          name: String(row.name ?? row.rest_name ?? row.restaurant_name ?? "Unnamed restaurant"),
+          status: row.status == null ? null : String(row.status),
+        }));
+      },
       providesTags: (result) =>
         result
           ? [

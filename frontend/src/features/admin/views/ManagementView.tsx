@@ -18,6 +18,7 @@ import {
 
 import { useGetRidersQuery } from "../../riders/api/ridersApi";
 import { useGetRestaurantsQuery } from "../../restaurants/api/restaurantsApi";
+import { RestaurantApprovalsView } from "./RestaurantApprovalsView";
 import { useGetOrdersQuery } from "../../orders/api/ordersApi";
 import { useGetStationsQuery } from "../../stations/api/stationsApi";
 
@@ -877,6 +878,7 @@ function RestaurantWorkspace({
     data: restaurants = [],
     isLoading,
     isError,
+    error: queryError,
   } = useGetRestaurantsQuery();
 
   useEffect(() => {
@@ -894,28 +896,7 @@ function RestaurantWorkspace({
   }
 
   if (subsection === "restaurants-approvals") {
-    const pendingRestaurants =
-      restaurants.filter(
-        (restaurant) =>
-          String(restaurant.status).toLowerCase() ===
-          "pending"
-      );
-
-    return (
-      <OperationalWorkspace
-        title="Restaurant Approvals"
-        eyebrow="APPROVALS"
-        description="Restaurants with a pending status."
-        rows={pendingRestaurants.map((restaurant) => [
-          restaurant.name,
-          restaurant.id,
-          restaurant.status ?? "—",
-        ])}
-        columns={["Restaurant", "ID", "Status"]}
-        loading={isLoading}
-        error={isError}
-      />
-    );
+    return <RestaurantApprovalsView />;
   }
 
   if (subsection === "restaurants-blocked") {
@@ -969,8 +950,15 @@ function RestaurantWorkspace({
       onSelect={setSelectedRestaurant}
       loading={isLoading}
       error={isError}
+      errorDetail={describeQueryError(queryError)}
     />
   );
+}
+
+function describeQueryError(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const { status, data } = error as { status?: number | string; data?: { message?: string } };
+  return [status, data?.message].filter(Boolean).join(" — ") || undefined;
 }
 
 function RestaurantList({
@@ -978,6 +966,7 @@ function RestaurantList({
   onSelect,
   loading,
   error,
+  errorDetail,
 }: {
   restaurants: {
     id: string;
@@ -987,6 +976,7 @@ function RestaurantList({
   onSelect: (name: string) => void;
   loading: boolean;
   error: boolean;
+  errorDetail?: string;
 }) {
   return (
     <section className="user-management-workspace">
@@ -1013,6 +1003,7 @@ function RestaurantList({
         <div className="api-state api-state--error">
           Unable to load restaurants. Check the API
           connection.
+          {errorDetail && <> Server said: {errorDetail}</>}
         </div>
       )}
 

@@ -39,6 +39,7 @@ export type EmployeeMeResponse = {
 };
 
 export const authApi = baseApi.injectEndpoints({
+    overrideExisting: true,
     endpoints: (builder) => ({
         employeeLogin: builder.mutation<
             EmployeeLoginResponse,

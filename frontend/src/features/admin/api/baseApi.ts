@@ -68,6 +68,7 @@ export const baseApi = createApi({
     "AdminUser",
     "AdminAccess",
     "Restaurant",
+    "ProfileRequest",
     "Order",
     "Rider",
     "Station",
