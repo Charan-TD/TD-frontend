@@ -8,6 +8,8 @@ import { useGetOrdersQuery } from "../../orders/api/ordersApi";
 import { useGetRidersQuery } from "../../riders/api/ridersApi";
 import { useGetStationsQuery } from "../../stations/api/stationsApi";
 import { useGetRestaurantsQuery } from "../../restaurants/api/restaurantsApi";
+import { useGetRegistrationRequestsQuery } from "../../restaurants/api/registrationRequestsApi";
+import { useGetProfileEditRequestsQuery } from "../../restaurants/api/profileEditRequestsApi";
 import { useGetEmployeesQuery } from "../../employees/api/adminUsersApi";
 
 type Props = { access: PortalSection[]; onNavigateManagement: () => void };
@@ -28,6 +30,9 @@ export function DashboardView({ access, onNavigateManagement }: Props) {
   const users = useGetUsersQuery({ page: 1, limit: 1 }, { skip: !has("users") });
   const employees = useGetEmployeesQuery({ page: 1, limit: 1 }, { skip: !has("employees") });
   const restaurants = useGetRestaurantsQuery(undefined, { skip: !has("restaurants") });
+  const pendingRegistrations = useGetRegistrationRequestsQuery("pending", { skip: !has("restaurants") });
+  const pendingProfileEdits = useGetProfileEditRequestsQuery("pending", { skip: !has("restaurants") });
+  const pendingRestaurants = (pendingRegistrations.data?.length ?? 0) + (pendingProfileEdits.data?.length ?? 0);
   const riders = useGetRidersQuery(undefined, { skip: !has("riders") });
   const orders = useGetOrdersQuery(undefined, { skip: !has("orders") });
   const stations = useGetStationsQuery(undefined, { skip: !has("stations") });
@@ -38,13 +43,12 @@ export function DashboardView({ access, onNavigateManagement }: Props) {
   const cards: DashboardCard[] = [
     { section: "users", label: "Users", value: countValue(users.isLoading, users.isError, users.data?.pagination.total), trend: caption(users.isError, "Registered customers"), icon: "users", tone: "orange" },
     { section: "employees", label: "Employees", value: countValue(employees.isLoading, employees.isError, employees.data?.total), trend: caption(employees.isError, "Staff accounts"), icon: "users", tone: "orange" },
-    { section: "restaurants", label: "Restaurants", value: countValue(restaurants.isLoading, restaurants.isError, restaurants.data?.length), trend: caption(restaurants.isError, `${restaurants.data?.filter((r) => isPending(r.status)).length ?? 0} awaiting approval`), icon: "store", tone: "mint" },
+    { section: "restaurants", label: "Restaurants", value: countValue(restaurants.isLoading, restaurants.isError, restaurants.data?.length), trend: caption(restaurants.isError, `${pendingRestaurants} awaiting approval`), icon: "store", tone: "mint" },
     { section: "orders", label: "Orders", value: countValue(orders.isLoading, orders.isError, orders.data?.length), trend: caption(orders.isError, "Total orders"), icon: "bag", tone: "indigo" },
     { section: "stations", label: "Stations", value: countValue(stations.isLoading, stations.isError, stations.data?.length), trend: caption(stations.isError, "Configured stations"), icon: "station", tone: "mint" },
   ];
   const visibleCards = cards.filter((card) => has(card.section));
 
-  const pendingRestaurants = restaurants.data?.filter((r) => isPending(r.status)).length ?? 0;
   const pendingRiders = riders.data?.filter((r) => isPending(r.status)).length ?? 0;
   const pendingApprovals = pendingRestaurants + pendingRiders;
   const canSeeApprovals = has("restaurants") || has("riders");

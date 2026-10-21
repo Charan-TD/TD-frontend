@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Icon } from "../../admin/components/Icon";
+import { UserAvatar } from "../../admin/components/UserAvatar";
 import { SidePanel } from "../../admin/components/SidePanel";
 import { ConfirmDialog } from "../../admin/components/ConfirmDialog";
 import { can, type PermissionMap } from "../../admin/models/access";
@@ -131,9 +132,7 @@ export function EmployeeDetailsView({
       </button>
       <header className="employee-profile-header">
         <div>
-          <span className="employee-avatar employee-avatar--large">
-            {employee.name.slice(0, 1).toUpperCase()}
-          </span>
+          <UserAvatar name={employee.name} size="large" />
           <div>
             <span className="eyebrow">ACCOUNT OVERVIEW</span>
             <h2>{employee.name}</h2>

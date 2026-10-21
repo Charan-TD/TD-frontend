@@ -5,6 +5,8 @@ import type { PermissionMatrix } from "../models/employee";
 import { can, type PermissionMap } from "../../admin/models/access";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { Icon } from "../../admin/components/Icon";
+import { RefreshButton } from "../../admin/components/RefreshButton";
+import { UserAvatar } from "../../admin/components/UserAvatar";
 
 import {
   useEmployeesViewModel,
@@ -210,17 +212,7 @@ export function EmployeesView({
         </div>
 
         <div className="employee-header-actions">
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={vm.refresh}
-            disabled={vm.isFetching}
-            data-tooltip={vm.isFetching ? "Already refreshing the employee list" : undefined}
-          >
-            {vm.isFetching
-              ? "Refreshing…"
-              : "Refresh"}
-          </button>
+          <RefreshButton refreshing={vm.isFetching} label="the employee list" onRefresh={vm.refresh} />
 
           {onManageRoles && (
             <button
@@ -272,23 +264,23 @@ export function EmployeesView({
           SEARCH
       ================================= */}
 
-      <div className="employee-toolbar">
-        <div className="employee-search">
-          <input
-            value={vm.query}
-            onChange={(event) =>
-              vm.setQuery(event.target.value)
-            }
-            placeholder="Search staff members…"
-            aria-label="Search staff members"
-          />
+      <div className="workspace-stat-row">
+        <div>
+          <strong>{vm.isLoading ? "…" : vm.totalEmployees}</strong>
+          <span>Team members</span>
         </div>
+      </div>
 
-        <span>
-          {vm.isFetching
-            ? "Syncing…"
-            : `${vm.totalEmployees} records`}
-        </span>
+      <div className="list-search">
+        <input
+          type="search"
+          value={vm.query}
+          onChange={(event) =>
+            vm.setQuery(event.target.value)
+          }
+          placeholder="Search staff members…"
+          aria-label="Search staff members"
+        />
       </div>
 
       {/* ================================
@@ -337,9 +329,12 @@ export function EmployeesView({
                       key={employee.id}
                     >
                       <td>
-                        <strong>
-                          {employee.name}
-                        </strong>
+                        <div className="user-cell">
+                          <UserAvatar name={employee.name} size="medium" />
+                          <strong>
+                            {employee.name}
+                          </strong>
+                        </div>
                       </td>
 
                       <td>

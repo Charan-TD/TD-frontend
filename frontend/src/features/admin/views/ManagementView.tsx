@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { CustomerUser } from "../models/customerUser";
 
 import { Icon } from "../components/Icon";
+import { RefreshButton } from "../components/RefreshButton";
 import { ComingSoonPanel } from "../components/ComingSoonPanel";
 import { UserAvatar } from "../components/UserAvatar";
 import { SkeletonTable } from "../components/Skeleton";
@@ -17,8 +18,9 @@ import {
 } from "../viewmodels/usersViewModel";
 
 import { useGetRidersQuery } from "../../riders/api/ridersApi";
-import { useGetRestaurantsQuery } from "../../restaurants/api/restaurantsApi";
+import { useGetRestaurantsQuery, type Restaurant } from "../../restaurants/api/restaurantsApi";
 import { RestaurantApprovalsView } from "./RestaurantApprovalsView";
+import { RestaurantDetailsView } from "./RestaurantDetailsView";
 import { useGetOrdersQuery } from "../../orders/api/ordersApi";
 import { useGetStationsQuery } from "../../stations/api/stationsApi";
 
@@ -222,15 +224,7 @@ function UsersTable({
           </p>
         </div>
 
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => vm.refresh()}
-          disabled={vm.isFetching}
-          data-tooltip={vm.isFetching ? "Already refreshing the user list" : undefined}
-        >
-          Refresh
-        </button>
+        <RefreshButton refreshing={vm.isFetching} label="the user list" onRefresh={() => vm.refresh()} />
       </header>
 
       {vm.errorMessage && (
@@ -239,8 +233,16 @@ function UsersTable({
         </div>
       )}
 
-      <div className="user-toolbar">
+      <div className="workspace-stat-row">
+        <div>
+          <strong>{vm.isLoading ? "…" : vm.users.length}</strong>
+          <span>Users</span>
+        </div>
+      </div>
+
+      <div className="list-search">
         <input
+          type="search"
           value={vm.search}
           onChange={(e) =>
             vm.onSearch(e.target.value)
@@ -248,12 +250,6 @@ function UsersTable({
           placeholder="Search by name, email or phone…"
           aria-label="Search users"
         />
-
-        <span>
-          {vm.isFetching
-            ? "Syncing…"
-            : `${vm.users.length} shown`}
-        </span>
       </div>
 
       {vm.isLoading && (
@@ -293,7 +289,7 @@ function UsersTable({
                           imageUrl={
                             user.profile_image_url
                           }
-                          size="small"
+                          size="medium"
                         />
 
                         <span>
@@ -537,7 +533,9 @@ function RiderWorkspace({
   const {
     data: riders = [],
     isLoading,
+    isFetching,
     isError,
+    refetch,
   } = useGetRidersQuery();
 
   if (subsection === "riders-approvals") {
@@ -560,6 +558,8 @@ function RiderWorkspace({
         columns={["Rider", "ID", "Status"]}
         loading={isLoading}
         error={isError}
+        onRefresh={() => refetch()}
+        refreshing={isFetching}
       />
     );
   }
@@ -584,6 +584,8 @@ function RiderWorkspace({
         columns={["Rider", "ID", "Status"]}
         loading={isLoading}
         error={isError}
+        onRefresh={() => refetch()}
+        refreshing={isFetching}
       />
     );
   }
@@ -611,6 +613,8 @@ function RiderWorkspace({
       columns={["Rider", "ID", "Status"]}
       loading={isLoading}
       error={isError}
+      onRefresh={() => refetch()}
+      refreshing={isFetching}
     />
   );
 }
@@ -623,7 +627,9 @@ function OrderWorkspace({
   const {
     data: orders = [],
     isLoading,
+    isFetching,
     isError,
+    refetch,
   } = useGetOrdersQuery();
 
   const visibleOrders =
@@ -680,6 +686,8 @@ function OrderWorkspace({
       ]}
       loading={isLoading}
       error={isError}
+      onRefresh={() => refetch()}
+      refreshing={isFetching}
     />
   );
 }
@@ -824,7 +832,9 @@ function StationWorkspace({
   const {
     data: stations = [],
     isLoading,
+    isFetching,
     isError,
+    refetch,
   } = useGetStationsQuery();
 
   if (subsection === "stations-inactive") {
@@ -862,6 +872,8 @@ function StationWorkspace({
       columns={["Station", "Code", "City"]}
       loading={isLoading}
       error={isError}
+      onRefresh={() => refetch()}
+      refreshing={isFetching}
     />
   );
 }
@@ -872,13 +884,15 @@ function RestaurantWorkspace({
   subsection: string;
 }) {
   const [selectedRestaurant, setSelectedRestaurant] =
-    useState<string | null>(null);
+    useState<Restaurant | null>(null);
 
   const {
     data: restaurants = [],
     isLoading,
+    isFetching,
     isError,
     error: queryError,
+    refetch,
   } = useGetRestaurantsQuery();
 
   useEffect(() => {
@@ -920,6 +934,8 @@ function RestaurantWorkspace({
         columns={["Restaurant", "ID", "Status"]}
         loading={isLoading}
         error={isError}
+        onRefresh={() => refetch()}
+        refreshing={isFetching}
       />
     );
   }
@@ -936,10 +952,10 @@ function RestaurantWorkspace({
 
   if (selectedRestaurant) {
     return (
-      <ComingSoonPanel
-        eyebrow="RESTAURANT"
-        title={selectedRestaurant}
-        description="Restaurant detail data is not connected to an API yet."
+      <RestaurantDetailsView
+        restaurantId={selectedRestaurant.id}
+        restaurantName={selectedRestaurant.name}
+        onBack={() => setSelectedRestaurant(null)}
       />
     );
   }
@@ -951,6 +967,8 @@ function RestaurantWorkspace({
       loading={isLoading}
       error={isError}
       errorDetail={describeQueryError(queryError)}
+      onRefresh={() => refetch()}
+      refreshing={isFetching}
     />
   );
 }
@@ -967,17 +985,23 @@ function RestaurantList({
   loading,
   error,
   errorDetail,
+  onRefresh,
+  refreshing,
 }: {
-  restaurants: {
-    id: string;
-    name: string;
-    status: string | null;
-  }[];
-  onSelect: (name: string) => void;
+  restaurants: Restaurant[];
+  onSelect: (restaurant: Restaurant) => void;
   loading: boolean;
   error: boolean;
   errorDetail?: string;
+  onRefresh: () => void;
+  refreshing: boolean;
 }) {
+  const [search, setSearch] = useState("");
+  const term = search.trim().toLowerCase();
+  const matching = term
+    ? restaurants.filter((restaurant) => restaurant.name.toLowerCase().includes(term))
+    : restaurants;
+
   return (
     <section className="user-management-workspace">
       <header className="user-activity-header">
@@ -988,15 +1012,27 @@ function RestaurantList({
             database response.
           </p>
         </div>
+
+        <RefreshButton refreshing={refreshing} label="the restaurants" onRefresh={onRefresh} />
       </header>
 
       <div className="workspace-stat-row">
         <div>
           <strong>
-            {loading ? "…" : restaurants.length}
+            {loading ? "…" : term ? `${matching.length} of ${restaurants.length}` : restaurants.length}
           </strong>
           <span>Restaurants</span>
         </div>
+      </div>
+
+      <div className="list-search">
+        <input
+          type="search"
+          placeholder="Search restaurants by name"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          aria-label="Search restaurants by name"
+        />
       </div>
 
       {error && (
@@ -1009,7 +1045,7 @@ function RestaurantList({
 
       {loading && !error && (
         <SkeletonTable
-          columns={["Restaurant", "ID", "Status", "Action"]}
+          columns={["Restaurant", "Contact", "Online", "Rating", "Action"]}
         />
       )}
 
@@ -1019,41 +1055,57 @@ function RestaurantList({
             <thead>
               <tr>
                 <th>Restaurant</th>
-                <th>ID</th>
-                <th>Status</th>
+                <th>Contact</th>
+                <th>Online</th>
+                <th>Rating</th>
                 <th>Action</th>
               </tr>
             </thead>
 
             <tbody>
-              {restaurants.map((restaurant) => (
+              {matching.map((restaurant) => (
                 <tr key={restaurant.id}>
                   <td>
-                    <button
-                      type="button"
-                      className="table-link-button"
-                      onClick={() =>
-                        onSelect(restaurant.name)
-                      }
-                    >
-                      {restaurant.name}
-                    </button>
+                    <div className="restaurant-cell">
+                      <UserAvatar name={restaurant.name} size="medium" />
+                      <div>
+                        <button type="button" className="table-link-button" onClick={() => onSelect(restaurant)}>
+                          {restaurant.name}
+                        </button>
+                        {restaurant.type && (
+                          <span className="restaurant-cell__type">{restaurant.type.replace(/_/g, " ")}</span>
+                        )}
+                      </div>
+                    </div>
                   </td>
-
-                  <td>{restaurant.id}</td>
 
                   <td>
-                    <span className="role-pill">
-                      {restaurant.status ?? "—"}
-                    </span>
+                    <div className="contact-cell">
+                      {restaurant.ownerName && <strong>{restaurant.ownerName}</strong>}
+                      <span>{restaurant.phone ?? "—"}</span>
+                      {restaurant.email && <span>{restaurant.email}</span>}
+                    </div>
                   </td>
+
+                  <td>
+                    {restaurant.onlineStatus ? (
+                      <span className={`status-pill${restaurant.onlineStatus === "OPEN" ? " status-pill--live" : ""}`}>
+                        <i />
+                        {restaurant.onlineStatus === "OPEN" ? "Open" : "Closed"}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+
+                  <td>{restaurant.rating != null ? `★ ${restaurant.rating}` : "—"}</td>
 
                   <td>
                     <button
                       type="button"
                       className="table-action"
                       onClick={() =>
-                        onSelect(restaurant.name)
+                        onSelect(restaurant)
                       }
                     >
                       View
@@ -1064,9 +1116,9 @@ function RestaurantList({
             </tbody>
           </table>
 
-          {!restaurants.length && (
+          {!matching.length && (
             <div className="api-state">
-              No restaurants found.
+              {restaurants.length ? `No restaurants match "${search.trim()}".` : "No restaurants found."}
             </div>
           )}
         </div>
@@ -1079,10 +1131,12 @@ function OperationalWorkspace({
   title,
   eyebrow,
   description,
-  rows,
+  rows: allRows,
   columns,
   loading = false,
   error = false,
+  onRefresh,
+  refreshing = false,
 }: {
   title: string;
   eyebrow?: string;
@@ -1091,7 +1145,15 @@ function OperationalWorkspace({
   columns: string[];
   loading?: boolean;
   error?: boolean;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }) {
+  const [search, setSearch] = useState("");
+  const term = search.trim().toLowerCase();
+  const rows = term
+    ? allRows.filter((row) => row.some((value) => String(value).toLowerCase().includes(term)))
+    : allRows;
+
   return (
     <section className="user-management-workspace">
       <header className="user-activity-header">
@@ -1105,15 +1167,27 @@ function OperationalWorkspace({
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
+
+        {onRefresh && <RefreshButton refreshing={refreshing} onRefresh={onRefresh} />}
       </header>
 
       <div className="workspace-stat-row">
         <div>
           <strong>
-            {loading ? "…" : rows.length}
+            {loading ? "…" : term ? `${rows.length} of ${allRows.length}` : rows.length}
           </strong>
           <span>Items in this view</span>
         </div>
+      </div>
+
+      <div className="list-search">
+        <input
+          type="search"
+          placeholder="Search this list"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          aria-label="Search this list"
+        />
       </div>
 
       {error && (

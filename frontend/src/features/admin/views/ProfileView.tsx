@@ -3,6 +3,7 @@
 import type { AdminProfile } from "../models/portal";
 import { navigationSections } from "../models/navigation";
 import { Icon } from "../components/Icon";
+import { UserAvatar } from "../components/UserAvatar";
 import { useProfileViewModel } from "../viewmodels/profileViewModel";
 
 const actionLabels = { read: "View", insert: "Create", update: "Edit", delete: "Delete" } as const;
@@ -14,7 +15,7 @@ export function ProfileView({ admin, onEdit }: { admin: AdminProfile; onEdit: ()
   return (
     <>
       <section className="profile-hero">
-        <div className="profile-identity"><span className="profile-avatar">{vm.admin.name.split(" ").map((word) => word[0]).join("")}</span><div><div className="profile-title"><h2>{vm.admin.name}</h2><span className="role-pill">{vm.admin.role}</span></div><p>Train Dabba</p></div></div>
+        <div className="profile-identity"><UserAvatar name={vm.admin.name} size="large" /><div><div className="profile-title"><h2>{vm.admin.name}</h2><span className="role-pill">{vm.admin.role}</span></div><p>Train Dabba</p></div></div>
         <button className="primary-button" type="button" onClick={vm.onEdit}><Icon name="edit" size={16} /> Edit profile</button>
       </section>
       <section className="profile-columns">

@@ -10,7 +10,8 @@ import { useSidebarViewModel } from "../viewmodels/sidebarViewModel";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
 import { UserAvatar } from "./UserAvatar";
-import { useGetRestaurantsQuery } from "../../restaurants/api/restaurantsApi";
+import { useGetRegistrationRequestsQuery } from "../../restaurants/api/registrationRequestsApi";
+import { useGetProfileEditRequestsQuery } from "../../restaurants/api/profileEditRequestsApi";
 import { useGetRidersQuery } from "../../riders/api/ridersApi";
 import { useGetEmployeesQuery } from "../../employees/api/adminUsersApi";
 
@@ -75,14 +76,16 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedM
    * tell at a glance whether that section needs attention: restaurants or
    * riders awaiting approval, or employees with no role assigned yet.
    */
-  const { data: restaurantsForAttention = [] } = useGetRestaurantsQuery(undefined, { skip: !allowed.has("restaurants") });
+  // Restaurants awaiting approval = new registrations + profile edits waiting for review.
+  const { data: pendingRegistrations = [] } = useGetRegistrationRequestsQuery("pending", { skip: !allowed.has("restaurants") });
+  const { data: pendingProfileEdits = [] } = useGetProfileEditRequestsQuery("pending", { skip: !allowed.has("restaurants") });
   const { data: ridersForAttention = [] } = useGetRidersQuery(undefined, { skip: !allowed.has("riders") });
   const { data: employeesForAttentionData } = useGetEmployeesQuery({ page: 1, limit: 100 }, { skip: !allowed.has("employees") });
 
   const employeesForAttention =
     employeesForAttentionData?.employees ?? [];
 
-  const pendingRestaurantsCount = restaurantsForAttention.filter((restaurant) => String(restaurant.status).toLowerCase() === "pending").length;
+  const pendingRestaurantsCount = pendingRegistrations.length + pendingProfileEdits.length;
   const pendingRidersCount = ridersForAttention.filter((rider) => String(rider.status).toLowerCase() === "pending").length;
   const unassignedEmployeesCount = employeesForAttention.filter((employee) => employee.role === "Unassigned").length;
 
