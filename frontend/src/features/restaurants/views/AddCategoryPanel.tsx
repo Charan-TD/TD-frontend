@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { RefreshButton } from "../../admin/components/RefreshButton";
 import { SidePanel } from "../../admin/components/SidePanel";
@@ -10,6 +10,9 @@ import { useCreateAdminCategoryMutation, useGetAdminCategoriesQuery } from "../a
 const NAME_MAX = 150;
 const IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+const formatSize = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 /** Same rules as the server: JPG, PNG or WEBP, up to 2 MB. */
 const imageProblem = (file: File | null): string | undefined => {
@@ -35,6 +38,8 @@ export function AddCategoryPanel({ open, onClose }: Props) {
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [showError, setShowError] = useState(false);
   const [formError, setFormError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
@@ -54,6 +59,11 @@ export function AddCategoryPanel({ open, onClose }: Props) {
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [image]);
+
+  const clearImage = () => {
+    setImage(null);
+    setFileInputKey((key) => key + 1);
+  };
 
   const resetForm = () => {
     setName("");
@@ -122,22 +132,64 @@ export function AddCategoryPanel({ open, onClose }: Props) {
           )}
         </label>
 
-        <label className="station-picker-slot">
-          <span>Category image *</span>
+        <div className="station-picker-slot image-field">
+          <span className="image-field__label">Category image *</span>
           <input
             key={fileInputKey}
+            ref={fileInput}
             type="file"
             accept="image/jpeg,image/png,image/webp"
+            className="image-field__input"
             onChange={(event) => setImage(event.target.files?.[0] ?? null)}
             disabled={saving}
           />
-          {showError && imageError ? (
-            <small className="field-error" role="alert">{imageError}</small>
+
+          {image && preview && !imageError ? (
+            <div className="image-field__chosen">
+              <img src={preview} alt="Selected category" />
+              <div className="image-field__meta">
+                <strong title={image.name}>{image.name}</strong>
+                <span>{formatSize(image.size)}</span>
+                <div className="image-field__actions">
+                  <button type="button" className="secondary-button" onClick={() => fileInput.current?.click()} disabled={saving}>
+                    Change
+                  </button>
+                  <button type="button" className="secondary-button" onClick={clearImage} disabled={saving}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
-            <small>JPG, PNG or WEBP, up to 2 MB.</small>
+            <button
+              type="button"
+              className={`image-field__drop ${dragging ? "is-dragging" : ""} ${showError && imageError ? "has-error" : ""}`}
+              onClick={() => fileInput.current?.click()}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragging(false);
+                const file = event.dataTransfer.files?.[0];
+                if (file) setImage(file);
+              }}
+              disabled={saving}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <circle cx="8.5" cy="8.5" r="1.6" />
+                <path d="m21 15-4.5-4.5L6 21" />
+              </svg>
+              <strong>Click to upload or drag an image here</strong>
+              <span>JPG, PNG or WEBP, up to 2 MB</span>
+            </button>
           )}
-          {preview && !imageProblem(image) && <img className="category-preview" src={preview} alt="Selected category" />}
-        </label>
+
+          {showError && imageError && <small className="field-error" role="alert">{imageError}</small>}
+        </div>
       </div>
 
       {formError && <div className="api-state api-state--error">{formError}</div>}

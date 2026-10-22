@@ -7174,14 +7174,6 @@ a.review-doc:hover {
 }
 
 /* Category image: chosen-file preview and list thumbnail. */
-.category-preview {
-  width: 120px;
-  height: 120px;
-  object-fit: cover;
-  border: 1px solid #e2e5ed;
-  border-radius: 9px;
-}
-
 .category-thumb {
   width: 36px;
   height: 36px;
@@ -7194,7 +7186,104 @@ a.review-doc:hover {
   margin-right: auto;
 }
 
-.form-grid input[type="file"] {
-  height: auto;
-  padding: 8px 11px;
+/* Category image uploader: drop zone and chosen-file card. */
+.image-field {
+  display: grid;
+  gap: 7px;
+}
+
+.image-field__label {
+  color: #59625d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.image-field__input {
+  display: none;
+}
+
+.image-field__drop {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 22px 16px;
+  border: 1.5px dashed #c9cfdb;
+  border-radius: 12px;
+  color: #59625d;
+  background: #fafbfc;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+
+.image-field__drop strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.image-field__drop span {
+  color: #7c837e;
+  font-size: 11px;
+}
+
+.image-field__drop:hover:not(:disabled),
+.image-field__drop.is-dragging {
+  border-color: #1f6b4f;
+  background: rgba(31, 107, 79, .05);
+}
+
+.image-field__drop.has-error {
+  border-color: #b24b42;
+}
+
+.image-field__drop:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.image-field__chosen {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #e2e5ed;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.image-field__chosen img {
+  width: 84px;
+  height: 84px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 9px;
+}
+
+.image-field__meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.image-field__meta strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-field__meta span {
+  color: #7c837e;
+  font-size: 11px;
+}
+
+.image-field__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.image-field__actions .secondary-button {
+  padding: 6px 12px;
+  font-size: 12px;
 }
