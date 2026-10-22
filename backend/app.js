@@ -25,7 +25,6 @@ import restaurantProfileRoutes from "./routes/restaurantProfile.routes.js";
 import adminRestaurantProfileRoutes from "./routes/adminRestaurantProfile.routes.js";
 import adminRestaurantRegistrationRoutes from "./routes/adminRestaurantRegistration.routes.js";
 import adminRestaurantRoutes from "./routes/adminRestaurant.routes.js";
-import adminCategoryRoutes from "./routes/admin-category.routes.js";
 import nearbyRestaurantRoutes from "./routes/nearby-restaurant.routes.js";
 import addonRoutes from "./routes/addon.routes.js";
 
@@ -145,7 +144,6 @@ app.use(
 );
 
 app.use("/api/v1/admin/restaurants", adminRestaurantRoutes);
-app.use("/api/v1/admin/categories", adminCategoryRoutes);
 
 app.use(
   "/api/v1",

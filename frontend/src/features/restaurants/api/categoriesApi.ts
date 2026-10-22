@@ -1,11 +1,10 @@
 import { baseApi } from "../../admin/api/baseApi";
 
-/** A food category created by an admin (not tied to one restaurant). */
+/** A food category. `created_by` is "admin" or "restaurant". */
 export type AdminCategory = {
-  id: number | string;
   category_id: string;
   category_name: string;
-  is_active: boolean | null;
+  created_by?: string | null;
 };
 
 export const categoriesApi = baseApi.injectEndpoints({
@@ -13,12 +12,14 @@ export const categoriesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getAdminCategories: builder.query<AdminCategory[], void>({
       query: () => "/admin/categories",
-      transformResponse: (response: { data?: AdminCategory[] }) =>
-        Array.isArray(response.data) ? response.data : [],
+      transformResponse: (response: { data?: AdminCategory[] | { categories?: AdminCategory[] } }) => {
+        const data = response.data;
+        return Array.isArray(data) ? data : (data?.categories ?? []);
+      },
       providesTags: [{ type: "AdminCategory", id: "LIST" }],
     }),
 
-    createAdminCategory: builder.mutation<AdminCategory, { name: string }>({
+    createAdminCategory: builder.mutation<AdminCategory, { category_name: string }>({
       query: (body) => ({ url: "/admin/categories", method: "POST", body }),
       transformResponse: (response: { data: AdminCategory }) => response.data,
       invalidatesTags: [{ type: "AdminCategory", id: "LIST" }],

@@ -7,7 +7,7 @@ import { SidePanel } from "../../admin/components/SidePanel";
 import { disabledReason } from "../../admin/models/disabledReason";
 import { useCreateAdminCategoryMutation, useGetAdminCategoriesQuery } from "../api/categoriesApi";
 
-const NAME_MAX = 100;
+const NAME_MAX = 150;
 
 type Props = {
   open: boolean;
@@ -46,7 +46,7 @@ export function AddCategoryPanel({ open, onClose }: Props) {
     if (nameError) return;
 
     try {
-      await createCategory({ name: trimmed }).unwrap();
+      await createCategory({ category_name: trimmed }).unwrap();
       setSavedMessage(`${trimmed} was added.`);
       setName("");
       setShowError(false);
@@ -62,7 +62,7 @@ export function AddCategoryPanel({ open, onClose }: Props) {
       onClose={close}
       eyebrow="CATEGORY"
       title="Add category"
-      description="Create an admin category. It is listed below with the others."
+      description="Create an admin category. All categories are listed below."
       closeDisabled={saving}
     >
       <div className="form-grid">
@@ -121,7 +121,10 @@ export function AddCategoryPanel({ open, onClose }: Props) {
             {categories.map((category) => (
               <li key={category.category_id}>
                 <strong>{category.category_name}</strong>
-                <span>{category.category_id}</span>
+                <span>
+                  {category.category_id}
+                  {category.created_by ? ` · ${category.created_by}` : ""}
+                </span>
               </li>
             ))}
           </ul>
