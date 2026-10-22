@@ -7287,3 +7287,111 @@ a.review-doc:hover {
   padding: 6px 12px;
   font-size: 12px;
 }
+
+/* Station performance: station picker, figures and breakdown. */
+.station-perf-picker {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.station-perf-picker label {
+  display: grid;
+  gap: 7px;
+  min-width: 280px;
+  color: #59625d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.station-perf-picker select {
+  height: 42px;
+  padding: 0 11px;
+  border: 1px solid #e2e5ed;
+  border-radius: 9px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.station-perf-picker select:focus {
+  border-color: #1f6b4f;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(31, 107, 79, .08);
+}
+
+.station-perf-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-bottom: 10px;
+  color: #7c837e;
+  font-size: 12px;
+}
+
+.station-perf-grid {
+  margin-top: 18px;
+}
+
+.station-perf-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.station-perf-heading {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.station-perf-bars {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.station-perf-bars li {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.station-perf-bars strong {
+  text-align: right;
+}
+
+.station-perf-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #eef1f0;
+}
+
+.station-perf-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: #1f6b4f;
+}
+
+.station-perf-note {
+  display: block;
+  margin-top: 14px;
+  color: #7c837e;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .station-perf-panels {
+    grid-template-columns: 1fr;
+  }
+}

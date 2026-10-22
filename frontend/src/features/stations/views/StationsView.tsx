@@ -9,6 +9,7 @@ import { SkeletonTable } from "../../admin/components/Skeleton";
 import { UserAvatar } from "../../admin/components/UserAvatar";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { StationLocationPicker, type PickedLocation } from "../components/StationLocationPicker";
+import { useGetAllOrdersQuery } from "../../orders/api/ordersApi";
 import {
   useCreateStationMutation,
   useGetStationsQuery,
@@ -546,52 +547,89 @@ function StationList({
 /* Station Performance                                                 */
 /* ------------------------------------------------------------------ */
 
+const IN_PROGRESS = ["PENDING_PAYMENT", "PLACED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
+
+const STATUS_LABELS: Record<string, string> = {
+  PENDING_PAYMENT: "Pending payment",
+  PLACED: "Placed",
+  CONFIRMED: "Confirmed",
+  PREPARING: "Preparing",
+  READY: "Ready",
+  OUT_FOR_DELIVERY: "Out for delivery",
+  DELIVERED: "Delivered",
+  CANCELLED: "Cancelled",
+};
+
+const rupees = (value: number) => `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+
+/** Performance of one station: pick a station, see its orders and how they are going. */
 function StationPerformance({ query }: { query: StationsQuery }) {
   const { data: stations = [], isLoading, isFetching, isError, refetch } = query;
+  const ordersQuery = useGetAllOrdersQuery();
 
-  const coverage = useMemo(() => {
-    const cities = new Set<string>();
-    const states = new Map<string, { stations: number; active: number; cities: Set<string> }>();
-    let active = 0;
+  const [selectedId, setSelectedId] = useState("");
 
-    stations.forEach((station) => {
-      const city = station.city?.trim();
-      const state = station.state?.trim() || "Not set";
-      if (city) cities.add(city.toLowerCase());
-      const entry = states.get(state) ?? { stations: 0, active: 0, cities: new Set<string>() };
-      entry.stations += 1;
-      if (isStationActive(station)) {
-        entry.active += 1;
-        active += 1;
+  const sorted = useMemo(
+    () => [...stations].sort((a, b) => a.name.localeCompare(b.name)),
+    [stations],
+  );
+  const station = sorted.find((item) => item.id === selectedId) ?? sorted[0] ?? null;
+
+  const figures = useMemo(() => {
+    if (!station) return null;
+    const orders = (ordersQuery.data ?? []).filter(
+      (order) => (order.delivery_station_id ?? order.boarding_station_id) === station.id,
+    );
+
+    const byStatus = new Map<string, number>();
+    let revenue = 0;
+    let delivered = 0;
+    let cancelled = 0;
+    let inProgress = 0;
+
+    orders.forEach((order) => {
+      const status = String(order.status ?? "UNKNOWN").toUpperCase();
+      byStatus.set(status, (byStatus.get(status) ?? 0) + 1);
+      if (status === "DELIVERED") {
+        delivered += 1;
+        revenue += Number(order.total) || 0;
+      } else if (status === "CANCELLED") {
+        cancelled += 1;
+      } else if (IN_PROGRESS.includes(status)) {
+        inProgress += 1;
       }
-      if (city) entry.cities.add(city.toLowerCase());
-      states.set(state, entry);
     });
 
+    const recent = [...orders]
+      .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
+      .slice(0, 8);
+
     return {
-      cities: cities.size,
-      active,
-      states: Array.from(states.entries())
-        .map(([state, entry]) => ({
-          state,
-          stations: entry.stations,
-          active: entry.active,
-          inactive: entry.stations - entry.active,
-          cities: entry.cities.size,
-        }))
-        .sort((a, b) => b.stations - a.stations),
+      total: orders.length,
+      delivered,
+      cancelled,
+      inProgress,
+      revenue,
+      average: delivered ? revenue / delivered : 0,
+      cancelRate: orders.length ? Math.round((cancelled / orders.length) * 100) : 0,
+      statuses: Array.from(byStatus.entries()).sort((a, b) => b[1] - a[1]),
+      recent,
     };
-  }, [stations]);
+  }, [station, ordersQuery.data]);
 
-  const number = (value: number) => (isLoading || isError ? "—" : String(value));
+  const loadingOrders = ordersQuery.isLoading;
+  const show = (value: string) => (loadingOrders || ordersQuery.isError ? "—" : value);
 
-  const coverageCards = [
-    { id: "total", label: "Total stations", description: "Stations configured in the system", icon: "station", tone: "saffron", value: number(stations.length) },
-    { id: "active", label: "Active stations", description: "Available to customers", icon: "check", tone: "mint", value: number(coverage.active) },
-    { id: "inactive", label: "Inactive stations", description: "Hidden from customers", icon: "station", tone: "slate", value: number(stations.length - coverage.active) },
-    { id: "cities", label: "Cities covered", description: "Distinct cities with a station", icon: "store", tone: "orange", value: number(coverage.cities) },
-    { id: "states", label: "States covered", description: "Distinct states with a station", icon: "chart", tone: "indigo", value: number(coverage.states.length) },
-  ] as const;
+  const cards = figures
+    ? ([
+        { id: "orders", label: "Total orders", description: "All orders for this station", icon: "bag", tone: "saffron", value: show(String(figures.total)) },
+        { id: "delivered", label: "Delivered", description: "Completed orders", icon: "check", tone: "mint", value: show(String(figures.delivered)) },
+        { id: "progress", label: "In progress", description: "Placed up to out for delivery", icon: "chart", tone: "indigo", value: show(String(figures.inProgress)) },
+        { id: "cancelled", label: "Cancelled", description: `${figures.cancelRate}% of orders`, icon: "bag", tone: "slate", value: show(String(figures.cancelled)) },
+        { id: "revenue", label: "Revenue", description: "From delivered orders", icon: "wallet", tone: "orange", value: show(rupees(figures.revenue)) },
+        { id: "average", label: "Average order value", description: "Per delivered order", icon: "wallet", tone: "violet", value: show(figures.delivered ? rupees(figures.average) : "—") },
+      ] as const)
+    : [];
 
   return (
     <section className="user-management-workspace">
@@ -599,10 +637,17 @@ function StationPerformance({ query }: { query: StationsQuery }) {
         <div>
           <span className="eyebrow">STATION PERFORMANCE</span>
           <h2>Station performance</h2>
-          <p>Where the station network reaches today, and how many stations are live.</p>
+          <p>Choose a station to see how its orders are going.</p>
         </div>
 
-        <RefreshButton refreshing={isFetching} label="the stations" onRefresh={() => refetch()} />
+        <RefreshButton
+          refreshing={isFetching || ordersQuery.isFetching}
+          label="the station figures"
+          onRefresh={() => {
+            refetch();
+            ordersQuery.refetch();
+          }}
+        />
       </header>
 
       {isError && (
@@ -611,51 +656,121 @@ function StationPerformance({ query }: { query: StationsQuery }) {
         </div>
       )}
 
-      <div className="user-activity-grid">
-        {coverageCards.map((card) => (
-          <article className={`user-activity-card user-activity-card--${card.tone}`} key={card.id}>
-            <div className="user-activity-card__top">
-              <span className={`user-activity-icon tone-${card.tone}`}>
-                <Icon name={card.icon} size={19} />
-              </span>
-            </div>
-            <p>{card.label}</p>
-            <strong>{card.value}</strong>
-            <small>{card.description}</small>
-          </article>
-        ))}
-
-      </div>
-
-      {isLoading && !isError && <SkeletonTable columns={["State", "Stations", "Active", "Inactive", "Cities"]} rows={4} />}
-
-      {!isLoading && !isError && (
-        <div className="user-table-wrap">
-          <table className="user-table">
-            <thead>
-              <tr>
-                <th>State</th>
-                <th>Stations</th>
-                <th>Active</th>
-                <th>Inactive</th>
-                <th>Cities</th>
-              </tr>
-            </thead>
-            <tbody>
-              {coverage.states.map((row) => (
-                <tr key={row.state}>
-                  <td>{row.state}</td>
-                  <td>{row.stations}</td>
-                  <td>{row.active}</td>
-                  <td>{row.inactive}</td>
-                  <td>{row.cities}</td>
-                </tr>
+      {!isError && (
+        <div className="station-perf-picker">
+          <label>
+            <span>Station</span>
+            <select
+              value={station?.id ?? ""}
+              onChange={(event) => setSelectedId(event.target.value)}
+              disabled={isLoading || !sorted.length}
+            >
+              {isLoading && <option>Loading stations…</option>}
+              {!isLoading && !sorted.length && <option>No stations yet</option>}
+              {sorted.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                  {item.code ? ` (${item.code})` : ""}
+                  {item.city ? ` — ${item.city}` : ""}
+                </option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </label>
 
-          {!coverage.states.length && <div className="api-state">No stations yet.</div>}
+          {station && (
+            <div className="station-perf-meta">
+              <span>
+                {[station.city, station.state].filter(Boolean).join(", ") || "Location not set"}
+              </span>
+              <span className={`status-pill ${isStationActive(station) ? "status-pill--live" : ""}`}>
+                <i />
+                {isStationActive(station) ? "Active" : "Inactive"}
+              </span>
+              <span>Added {formatDate(station.created_at)}</span>
+            </div>
+          )}
         </div>
+      )}
+
+      {station && ordersQuery.isError && (
+        <div className="api-state api-state--error">
+          Unable to load orders, so the figures below are not available. Check the API connection and try again.
+        </div>
+      )}
+
+      {station && (
+        <>
+          <div className="user-activity-grid station-perf-grid">
+            {cards.map((card) => (
+              <article className={`user-activity-card user-activity-card--${card.tone}`} key={card.id}>
+                <div className="user-activity-card__top">
+                  <span className={`user-activity-icon tone-${card.tone}`}>
+                    <Icon name={card.icon} size={19} />
+                  </span>
+                </div>
+                <p>{card.label}</p>
+                <strong>{card.value}</strong>
+                <small>{card.description}</small>
+              </article>
+            ))}
+          </div>
+
+          {figures && !loadingOrders && !ordersQuery.isError && (
+            <div className="station-perf-panels">
+              <div className="user-table-wrap">
+                <h3 className="station-perf-heading">Orders by status</h3>
+                {figures.statuses.length ? (
+                  <ul className="station-perf-bars">
+                    {figures.statuses.map(([status, count]) => (
+                      <li key={status}>
+                        <span>{STATUS_LABELS[status] ?? status}</span>
+                        <div className="station-perf-bar">
+                          <i style={{ width: `${Math.round((count / figures.total) * 100)}%` }} />
+                        </div>
+                        <strong>{count}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="api-state">No orders for this station yet.</div>
+                )}
+              </div>
+
+              <div className="user-table-wrap">
+                <h3 className="station-perf-heading">Recent orders</h3>
+                {figures.recent.length ? (
+                  <table className="user-table">
+                    <thead>
+                      <tr>
+                        <th>Order</th>
+                        <th>Status</th>
+                        <th>Total</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {figures.recent.map((order) => (
+                        <tr key={order.id}>
+                          <td>{order.order_number ?? order.id.slice(0, 8)}</td>
+                          <td>{STATUS_LABELS[String(order.status).toUpperCase()] ?? order.status ?? "—"}</td>
+                          <td>{order.total == null ? "—" : rupees(Number(order.total) || 0)}</td>
+                          <td>{formatDate(order.journey_date ?? order.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="api-state">No orders for this station yet.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <small className="station-perf-note">
+            Orders are matched to the station they are delivered at, or the station the customer boards at when the
+            delivery station is not provided.
+          </small>
+        </>
       )}
     </section>
   );
