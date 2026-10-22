@@ -683,14 +683,20 @@ function OrderWorkspace({
       description={description}
       rows={visibleOrders.map((order) => [
         order.order_number ?? "—",
-        order.customer_user_id ?? "—",
         order.restaurant_id ?? "—",
-        order.status ?? "—",
+        order.restaurant_name ?? "—",
+        order.delivery_station_name
+          ? `${order.delivery_station_name}${order.delivery_station_code ? ` (${order.delivery_station_code})` : ""}`
+          : "—",
+        order.total == null ? "—" : `₹${Number(order.total).toLocaleString("en-IN")}`,
+        order.status_label ?? order.status ?? "—",
       ])}
       columns={[
         "Order Number",
-        "Customer User ID",
         "Restaurant ID",
+        "Restaurant",
+        "Delivery Station",
+        "Total",
         "Status",
       ]}
       loading={isLoading}

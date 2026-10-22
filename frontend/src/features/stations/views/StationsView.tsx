@@ -577,8 +577,11 @@ function StationPerformance({ query }: { query: StationsQuery }) {
 
   const figures = useMemo(() => {
     if (!station) return null;
-    const orders = (ordersQuery.data ?? []).filter(
-      (order) => (order.delivery_station_id ?? order.boarding_station_id) === station.id,
+    const code = station.code?.trim().toUpperCase();
+    const orders = (ordersQuery.data ?? []).filter((order) =>
+      order.delivery_station_code
+        ? order.delivery_station_code.trim().toUpperCase() === code
+        : (order.delivery_station_id ?? order.boarding_station_id) === station.id,
     );
 
     const byStatus = new Map<string, number>();
@@ -759,7 +762,7 @@ function StationPerformance({ query }: { query: StationsQuery }) {
                       {figures.recent.map((order) => (
                         <tr key={order.id}>
                           <td>{order.order_number ?? order.id.slice(0, 8)}</td>
-                          <td>{STATUS_LABELS[String(order.status).toUpperCase()] ?? order.status ?? "—"}</td>
+                          <td>{order.status_label ?? STATUS_LABELS[String(order.status).toUpperCase()] ?? order.status ?? "—"}</td>
                           <td>{order.total == null ? "—" : rupees(Number(order.total) || 0)}</td>
                           <td>{formatDate(order.journey_date ?? order.created_at)}</td>
                         </tr>
@@ -774,8 +777,7 @@ function StationPerformance({ query }: { query: StationsQuery }) {
           )}
 
           <small className="station-perf-note">
-            Orders are matched to the station they are delivered at, or the station the customer boards at when the
-            delivery station is not provided.
+            Orders are matched to the station they are delivered at.
           </small>
         </>
       )}

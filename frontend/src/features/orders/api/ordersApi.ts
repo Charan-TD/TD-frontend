@@ -2,9 +2,11 @@ import { baseApi } from "../../admin/api/baseApi";
 
 export type Order = {
   id: string;
-  customer_user_id: string | null;
-  restaurant_station_service_id: string | null;
+  customer_user_id?: string | null;
+  restaurant_station_service_id?: string | null;
   status: string | null;
+  /** Readable status, e.g. "Delivered". */
+  status_label?: string | null;
   /** Station the customer boards at. */
   boarding_station_id?: string | null;
   /** Present on some server versions: the station the food is delivered at. */
@@ -13,6 +15,12 @@ export type Order = {
   /** The restaurant's readable ID (not its UUID). */
   restaurant_id?: string | null;
   restaurant_name?: string | null;
+  /** The station the food is delivered at. */
+  delivery_station_name?: string | null;
+  delivery_station_code?: string | null;
+  items_summary?: string | null;
+  train_number?: string | null;
+  train_name?: string | null;
   journey_date?: string | null;
   /** Order total in rupees. */
   total?: number | string | null;
@@ -21,7 +29,9 @@ export type Order = {
 
 type OrderList = {
   orders: Order[];
-  pagination: { page: number; limit: number; total: number; totalPages: number };
+  /** Newer servers send a plain total; older ones a pagination object. */
+  total?: number;
+  pagination?: { page: number; limit: number; total: number; totalPages: number };
 };
 
 export const ordersApi = baseApi.injectEndpoints({
@@ -55,8 +65,10 @@ export const ordersApi = baseApi.injectEndpoints({
           const result = await baseQuery({ url: "/orders", method: "GET", params: { page, limit: 100 } });
           if (result.error) return { error: result.error };
           const data = (result.data as { data?: OrderList }).data;
-          all.push(...(data?.orders ?? []));
-          if (page >= (data?.pagination?.totalPages ?? 1)) break;
+          const batch = data?.orders ?? [];
+          all.push(...batch);
+          const total = data?.total ?? data?.pagination?.total ?? 0;
+          if (batch.length < 100 || all.length >= total) break;
         }
         return { data: all };
       },
