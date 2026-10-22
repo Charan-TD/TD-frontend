@@ -682,14 +682,14 @@ function OrderWorkspace({
       eyebrow={title.toUpperCase()}
       description={description}
       rows={visibleOrders.map((order) => [
-        order.id,
+        order.order_number ?? "—",
         order.customer_user_id ?? "—",
         order.restaurant_station_service_id ??
         "—",
         order.status ?? "—",
       ])}
       columns={[
-        "Order ID",
+        "Order Number",
         "Customer User ID",
         "Restaurant Service ID",
         "Status",
