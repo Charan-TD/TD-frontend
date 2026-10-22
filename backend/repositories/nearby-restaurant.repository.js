@@ -10,6 +10,7 @@ export const getStationDropdown = async () => {
       city,
       state
     FROM public.stations
+    WHERE is_active = TRUE
     ORDER BY name ASC
   `);
 
@@ -22,6 +23,7 @@ export const findStationByName = async (stationName) => {
     SELECT id, name, code, city, state
     FROM public.stations
     WHERE LOWER(name) = LOWER($1)
+      AND is_active = TRUE
     ORDER BY name
     LIMIT 1
     `,

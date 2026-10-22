@@ -30,10 +30,6 @@ type Props = {
 export function StationsView({ subsection, canInsert, canUpdate, canDelete }: Props) {
   const stationsQuery = useGetStationsQuery();
 
-  if (subsection === "stations-inactive") {
-    return <InactiveStations />;
-  }
-
   if (subsection === "stations-performance") {
     return <StationPerformance query={stationsQuery} />;
   }
@@ -41,7 +37,7 @@ export function StationsView({ subsection, canInsert, canUpdate, canDelete }: Pr
   return (
     <StationList
       key={subsection}
-      active={subsection === "stations-active"}
+      view={subsection === "stations-active" ? "active" : subsection === "stations-inactive" ? "inactive" : "all"}
       query={stationsQuery}
       canInsert={canInsert}
       canUpdate={canUpdate}
@@ -73,11 +69,12 @@ type FormValues = {
   state: string;
   latitude: string;
   longitude: string;
+  status: "active" | "inactive";
 };
 
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
-const emptyForm: FormValues = { name: "", code: "", city: "", state: "", latitude: "", longitude: "" };
+const emptyForm: FormValues = { name: "", code: "", city: "", state: "", latitude: "", longitude: "", status: "active" };
 
 const toForm = (station: Station): FormValues => ({
   name: station.name ?? "",
@@ -86,7 +83,13 @@ const toForm = (station: Station): FormValues => ({
   state: station.state ?? "",
   latitude: station.latitude == null ? "" : String(station.latitude),
   longitude: station.longitude == null ? "" : String(station.longitude),
+  status: isStationActive(station) ? "active" : "inactive",
 });
+
+export type StationView = "all" | "active" | "inactive";
+
+/** Older servers have no is_active field, so a station counts as active unless it is false. */
+const isStationActive = (station: Station) => station.is_active !== false;
 
 const requiredText = (value: string, label: string, max: number) => {
   const text = value.trim();
@@ -144,13 +147,13 @@ const formatDate = (value?: string | null) => {
 /* ------------------------------------------------------------------ */
 
 function StationList({
-  active,
+  view,
   query,
   canInsert,
   canUpdate,
   canDelete,
 }: {
-  active: boolean;
+  view: StationView;
   query: StationsQuery;
   canInsert: boolean;
   canUpdate: boolean;
@@ -171,19 +174,26 @@ function StationList({
   const [toDelete, setToDelete] = useState<Station | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const saving = isCreating || isUpdating;
   const errors = validate(values);
   const hasErrors = Object.keys(errors).length > 0;
 
+  const readOnly = view === "active";
+  const inView = stations.filter((station) =>
+    view === "all" ? true : view === "active" ? isStationActive(station) : !isStationActive(station),
+  );
+
   const term = search.trim().toLowerCase();
   const matching = term
-    ? stations.filter((station) =>
+    ? inView.filter((station) =>
         [station.name, station.code, station.city, station.state].some((value) =>
           String(value ?? "").toLowerCase().includes(term),
         ),
       )
-    : stations;
+    : inView;
 
   const changes = useMemo(() => {
     if (!editing) return {};
@@ -196,6 +206,7 @@ function StationList({
     // The API can set coordinates but not clear them, so an emptied box is ignored.
     if (values.latitude.trim() && Number(values.latitude) !== Number(original.latitude)) diff.latitude = Number(values.latitude);
     if (values.longitude.trim() && Number(values.longitude) !== Number(original.longitude)) diff.longitude = Number(values.longitude);
+    if (values.status !== original.status) diff.is_active = values.status === "active";
     return diff;
   }, [editing, values]);
 
@@ -250,6 +261,8 @@ function StationList({
       state: values.state.trim(),
       ...(values.latitude.trim() ? { latitude: Number(values.latitude) } : {}),
       ...(values.longitude.trim() ? { longitude: Number(values.longitude) } : {}),
+      // New stations are active by default, so only an inactive choice needs sending.
+      ...(values.status === "inactive" ? { is_active: false } : {}),
     };
 
     try {
@@ -278,25 +291,48 @@ function StationList({
     }
   };
 
-  const columns = ["Station", "Code", "City", "State", "Coordinates", active ? "Status" : "Added", ...(active ? [] : ["Action"])];
+  const toggleStatus = async (station: Station) => {
+    const activate = !isStationActive(station);
+    setActionError("");
+    setSavedMessage("");
+    setTogglingId(station.id);
+    try {
+      await updateStation({ id: station.id, changes: { is_active: activate } }).unwrap();
+      setSavedMessage(`${station.name} is now ${activate ? "active" : "inactive"}.`);
+    } catch (error) {
+      setActionError(errorText(error, "The station status could not be changed."));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const columns = readOnly
+    ? ["Station", "Code", "City", "State", "Coordinates", "Status"]
+    : ["Station", "Code", "City", "State", "Coordinates", "Status", "Added", "Action"];
+
+  const eyebrow = view === "active" ? "ACTIVE STATIONS" : view === "inactive" ? "INACTIVE STATIONS" : "ALL STATIONS";
+  const heading = view === "active" ? "Active stations" : view === "inactive" ? "Inactive stations" : "All stations";
+  const emptyText = view === "all" ? "No stations yet. Use “Add station” to create the first one." : `No ${view} stations.`;
 
   return (
     <section className="user-management-workspace">
       <header className="user-activity-header">
         <div>
-          <span className="eyebrow">{active ? "ACTIVE STATIONS" : "ALL STATIONS"}</span>
-          <h2>{active ? "Active stations" : "All stations"}</h2>
+          <span className="eyebrow">{eyebrow}</span>
+          <h2>{heading}</h2>
           <p>
-            {active
-              ? "Stations customers can currently pick. The stations API has no status field yet, so every configured station is shown as active."
-              : "Railway stations customers can order at. Add a station here and it appears in the customer station list."}
+            {view === "active"
+              ? "Stations customers can currently pick."
+              : view === "inactive"
+                ? "Stations hidden from customers. Activate one to make it available again."
+                : "Railway stations customers can order at. Inactive stations are hidden from customers."}
           </p>
         </div>
 
         <div className="employee-header-actions">
           <RefreshButton refreshing={isFetching} label="the stations" onRefresh={() => refetch()} />
 
-          {!active && (
+          {!readOnly && (
             <button
               type="button"
               className="primary-button"
@@ -312,11 +348,12 @@ function StationList({
       </header>
 
       {savedMessage && <div className="success-banner">{savedMessage}</div>}
+      {actionError && <div className="api-state api-state--error">{actionError}</div>}
 
       <div className="workspace-stat-row">
         <div>
-          <strong>{isLoading ? "…" : term ? `${matching.length} of ${stations.length}` : stations.length}</strong>
-          <span>{active ? "Active stations" : "Stations"}</span>
+          <strong>{isLoading ? "…" : term ? `${matching.length} of ${inView.length}` : inView.length}</strong>
+          <span>{view === "active" ? "Active stations" : view === "inactive" ? "Inactive stations" : "Stations"}</span>
         </div>
       </div>
 
@@ -365,14 +402,14 @@ function StationList({
                   <td>{station.state ?? "—"}</td>
                   <td>{formatCoordinate(station)}</td>
 
-                  {active ? (
-                    <td>
-                      <span className="status-pill status-pill--live">
-                        <i />
-                        Active
-                      </span>
-                    </td>
-                  ) : (
+                  <td>
+                    <span className={`status-pill ${isStationActive(station) ? "status-pill--live" : ""}`}>
+                      <i />
+                      {isStationActive(station) ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+
+                  {!readOnly && (
                     <>
                       <td>{formatDate(station.created_at)}</td>
                       <td>
@@ -385,6 +422,16 @@ function StationList({
                           data-tooltip-kind="access"
                         >
                           Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action"
+                          onClick={() => toggleStatus(station)}
+                          disabled={!canUpdate || togglingId === station.id}
+                          data-tooltip={canUpdate ? undefined : noAccess("change station status")}
+                          data-tooltip-kind="access"
+                        >
+                          {togglingId === station.id ? "Saving…" : isStationActive(station) ? "Deactivate" : "Activate"}
                         </button>
                         <button
                           type="button"
@@ -409,7 +456,7 @@ function StationList({
 
           {!matching.length && (
             <div className="api-state">
-              {stations.length ? `No stations match "${search.trim()}".` : "No stations yet. Use “Add station” to create the first one."}
+              {inView.length ? `No stations match "${search.trim()}".` : emptyText}
             </div>
           )}
         </div>
@@ -476,6 +523,19 @@ function StationList({
             {showErrors && errors.state && <small className="field-error" role="alert">{errors.state}</small>}
           </label>
 
+          <label>
+            <span>Status</span>
+            <select
+              value={values.status}
+              onChange={(event) => setValues((current) => ({ ...current, status: event.target.value as FormValues["status"] }))}
+              disabled={saving}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <small>Inactive stations are hidden from customers.</small>
+          </label>
+
           <div className="station-picker-slot">
             <StationLocationPicker
               latitude={values.latitude}
@@ -527,51 +587,6 @@ function StationList({
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(null)}
       />
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Inactive / Suspended                                                */
-/* ------------------------------------------------------------------ */
-
-function InactiveStations() {
-  const columns = ["Station", "Code", "City", "Reason", "Suspended on"];
-
-  return (
-    <section className="user-management-workspace">
-      <header className="user-activity-header">
-        <div>
-          <span className="eyebrow">INACTIVE / SUSPENDED</span>
-          <h2>Inactive / suspended stations</h2>
-          <p>Stations paused for customers, with the reason and date, and a way to bring them back.</p>
-        </div>
-      </header>
-
-      <div className="workspace-stat-row">
-        <div>
-          <strong>—</strong>
-          <span>Inactive stations</span>
-        </div>
-      </div>
-
-      <div className="user-table-wrap">
-        <table className="user-table">
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column}>{column}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody />
-        </table>
-
-        <div className="api-state">
-          Suspending a station isn’t available yet. The stations API has no status field, so nothing can be listed
-          here. Once it does, suspended stations will appear in this table.
-        </div>
-      </div>
     </section>
   );
 }

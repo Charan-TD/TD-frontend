@@ -42,6 +42,21 @@ const validateOptionalString = (
   return null;
 };
 
+const validateOptionalBoolean = (
+  value,
+  fieldName
+) => {
+  if (
+    value !== undefined &&
+    value !== null &&
+    typeof value !== "boolean"
+  ) {
+    return `${fieldName} must be true or false`;
+  }
+
+  return null;
+};
+
 const validateCoordinate = (
   value,
   fieldName,
@@ -136,10 +151,20 @@ export const validateCreateStation = (
     city,
     state,
     latitude,
-    longitude
+    longitude,
+    is_active
   } = req.body;
 
   let error;
+
+  error = validateOptionalBoolean(is_active, "is_active");
+
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      message: error
+    });
+  }
 
   error = validateString(
     name,
@@ -249,7 +274,8 @@ export const validateUpdateStation = (
     "city",
     "state",
     "latitude",
-    "longitude"
+    "longitude",
+    "is_active"
   ];
 
   const providedFields = Object.keys(req.body);
@@ -278,10 +304,20 @@ export const validateUpdateStation = (
     city,
     state,
     latitude,
-    longitude
+    longitude,
+    is_active
   } = req.body;
 
   let error;
+
+  error = validateOptionalBoolean(is_active, "is_active");
+
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      message: error
+    });
+  }
 
   if (name !== undefined) {
     error = validateString(

@@ -9,6 +9,8 @@ export type Station = {
   // Postgres can return decimals as strings, so both are accepted.
   latitude?: number | string | null;
   longitude?: number | string | null;
+  /** Missing on older servers; a station is treated as active unless this is false. */
+  is_active?: boolean | null;
   created_at?: string | null;
 };
 
@@ -20,6 +22,7 @@ export type StationInput = {
   state: string;
   latitude?: number;
   longitude?: number;
+  is_active?: boolean;
 };
 
 type StationList = {

@@ -132,6 +132,9 @@ router.get(
  *                 type: number
  *               longitude:
  *                 type: number
+ *               is_active:
+ *                 type: boolean
+ *                 description: false hides the station from customers (defaults to true)
  *             example:
  *               name: "Secunderabad Junction"
  *               code: "SC"
@@ -193,6 +196,9 @@ router.post(
  *                 type: number
  *               longitude:
  *                 type: number
+ *               is_active:
+ *                 type: boolean
+ *                 description: false hides the station from customers (defaults to true)
  *     responses:
  *       200:
  *         description: Station updated successfully

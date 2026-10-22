@@ -16,6 +16,7 @@ export const getStations = async ({
       state,
       latitude,
       longitude,
+      is_active,
       created_at
     FROM stations
     ORDER BY created_at DESC
@@ -52,6 +53,7 @@ export const findStationById = async (id) => {
       state,
       latitude,
       longitude,
+      is_active,
       created_at
     FROM stations
     WHERE id = $1
@@ -74,6 +76,7 @@ export const findStationByCode = async (code) => {
       state,
       latitude,
       longitude,
+      is_active,
       created_at
     FROM stations
     WHERE UPPER(code) = UPPER($1)
@@ -92,7 +95,8 @@ export const createStation = async ({
   city,
   state,
   latitude,
-  longitude
+  longitude,
+  is_active
 }) => {
   const query = `
     INSERT INTO stations (
@@ -101,9 +105,10 @@ export const createStation = async ({
       city,
       state,
       latitude,
-      longitude
+      longitude,
+      is_active
     )
-    VALUES ($1, $2, $3, $4, $5, $6)
+    VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, TRUE))
     RETURNING
       id,
       name,
@@ -112,6 +117,7 @@ export const createStation = async ({
       state,
       latitude,
       longitude,
+      is_active,
       created_at
   `;
 
@@ -121,7 +127,8 @@ export const createStation = async ({
     city,
     state,
     latitude ?? null,
-    longitude ?? null
+    longitude ?? null,
+    is_active ?? null
   ];
 
   const result = await pool.query(query, values);
@@ -138,7 +145,8 @@ export const updateStation = async (
     city,
     state,
     latitude,
-    longitude
+    longitude,
+    is_active
   }
 ) => {
   const query = `
@@ -149,8 +157,9 @@ export const updateStation = async (
       city = COALESCE($3, city),
       state = COALESCE($4, state),
       latitude = COALESCE($5, latitude),
-      longitude = COALESCE($6, longitude)
-    WHERE id = $7
+      longitude = COALESCE($6, longitude),
+      is_active = COALESCE($7, is_active)
+    WHERE id = $8
     RETURNING
       id,
       name,
@@ -159,6 +168,7 @@ export const updateStation = async (
       state,
       latitude,
       longitude,
+      is_active,
       created_at
   `;
 
@@ -169,6 +179,7 @@ export const updateStation = async (
     state ?? null,
     latitude ?? null,
     longitude ?? null,
+    is_active ?? null,
     id
   ];
 
@@ -190,6 +201,7 @@ export const deleteStation = async (id) => {
       state,
       latitude,
       longitude,
+      is_active,
       created_at
   `;
 
