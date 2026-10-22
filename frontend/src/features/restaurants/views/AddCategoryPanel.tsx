@@ -61,8 +61,8 @@ export function AddCategoryPanel({ open, onClose }: Props) {
       open={open}
       onClose={close}
       eyebrow="CATEGORY"
-      title="Add category"
-      description="Create an admin category. All categories are listed below."
+      title="Add food category"
+      description="Create a food category for restaurants. All categories are listed below."
       closeDisabled={saving}
     >
       <div className="form-grid">
@@ -100,7 +100,7 @@ export function AddCategoryPanel({ open, onClose }: Props) {
           disabled={Boolean(saveBlocked)}
           data-tooltip={saveBlocked}
         >
-          {saving ? "Saving…" : "Add category"}
+          {saving ? "Saving…" : "Add food category"}
         </button>
       </div>
 

@@ -983,10 +983,10 @@ function RestaurantList({
             className="primary-button"
             onClick={() => setCategoryPanelOpen(true)}
             disabled={!canAddCategory}
-            data-tooltip={canAddCategory ? "Create a new food category that restaurants can use for their menu items. Opens a panel where you can also see all existing categories." : noAccess("add categories")}
+            data-tooltip={canAddCategory ? "Add a food category for restaurants (e.g. Biryani, Starters). Restaurants use these categories to organise their menu items. Opens a panel where you can also see all existing categories." : noAccess("add categories")}
             data-tooltip-kind="access"
           >
-            Add category
+            Add food category
           </button>
         </div>
       </header>
