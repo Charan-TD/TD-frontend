@@ -52,6 +52,22 @@ const router = express.Router();
  *     responses:
  *       200:
  *         description: Stations retrieved successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               data:
+ *                 stations:
+ *                   - id: "uuid"
+ *                     name: "Secunderabad Junction"
+ *                     code: "SC"
+ *                     city: "Hyderabad"
+ *                     state: "Telangana"
+ *                     latitude: 17.4344
+ *                     longitude: 78.5013
+ *                     is_active: true
+ *                     created_at: "2026-10-22T10:30:00.000Z"
+ *                 pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
  *       401:
  *         description: Unauthorized
  *       403:

@@ -9,6 +9,12 @@ import {
 
 import { AppError } from "../utils/app-error.js";
 
+// 23505 = unique violation: two requests used the same station code at once.
+const duplicateCodeError = (error) =>
+  error.code === "23505"
+    ? new AppError("Station with this code already exists", 409)
+    : error;
+
 // List stations
 export const listStations = async ({
   page = 1,
@@ -107,7 +113,11 @@ export const createStationService = async (
     );
   }
 
-  return await createStation(data);
+  try {
+    return await createStation(data);
+  } catch (error) {
+    throw duplicateCodeError(error);
+  }
 };
 
 // Update station
@@ -173,7 +183,7 @@ export const updateStationService = async (
   if (
     data.code &&
     data.code.toUpperCase() !==
-      existingStation.code.toUpperCase()
+      (existingStation.code ?? "").toUpperCase()
   ) {
     const existingByCode =
       await findStationByCode(data.code);
@@ -189,10 +199,14 @@ export const updateStationService = async (
     }
   }
 
-  return await updateStation(
-    id,
-    data
-  );
+  try {
+    return await updateStation(
+      id,
+      data
+    );
+  } catch (error) {
+    throw duplicateCodeError(error);
+  }
 };
 
 // Delete station
