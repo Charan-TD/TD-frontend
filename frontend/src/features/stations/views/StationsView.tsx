@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 
-import { ConfirmDialog } from "../../admin/components/ConfirmDialog";
 import { Icon } from "../../admin/components/Icon";
 import { RefreshButton } from "../../admin/components/RefreshButton";
 import { SidePanel } from "../../admin/components/SidePanel";
@@ -12,7 +11,6 @@ import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { StationLocationPicker, type PickedLocation } from "../components/StationLocationPicker";
 import {
   useCreateStationMutation,
-  useDeleteStationMutation,
   useGetStationsQuery,
   useUpdateStationMutation,
   type Station,
@@ -24,10 +22,9 @@ type Props = {
   subsection: string;
   canInsert: boolean;
   canUpdate: boolean;
-  canDelete: boolean;
 };
 
-export function StationsView({ subsection, canInsert, canUpdate, canDelete }: Props) {
+export function StationsView({ subsection, canInsert, canUpdate }: Props) {
   const stationsQuery = useGetStationsQuery();
 
   if (subsection === "stations-performance") {
@@ -41,7 +38,6 @@ export function StationsView({ subsection, canInsert, canUpdate, canDelete }: Pr
       query={stationsQuery}
       canInsert={canInsert}
       canUpdate={canUpdate}
-      canDelete={canDelete}
     />
   );
 }
@@ -151,19 +147,16 @@ function StationList({
   query,
   canInsert,
   canUpdate,
-  canDelete,
 }: {
   view: StationView;
   query: StationsQuery;
   canInsert: boolean;
   canUpdate: boolean;
-  canDelete: boolean;
 }) {
   const { data: stations = [], isLoading, isFetching, isError, refetch } = query;
 
   const [createStation, { isLoading: isCreating }] = useCreateStationMutation();
   const [updateStation, { isLoading: isUpdating }] = useUpdateStationMutation();
-  const [deleteStation, { isLoading: isDeleting }] = useDeleteStationMutation();
 
   const [search, setSearch] = useState("");
   const [panelOpen, setPanelOpen] = useState(false);
@@ -171,8 +164,6 @@ function StationList({
   const [values, setValues] = useState<FormValues>(emptyForm);
   const [showErrors, setShowErrors] = useState(false);
   const [formError, setFormError] = useState("");
-  const [toDelete, setToDelete] = useState<Station | null>(null);
-  const [deleteError, setDeleteError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
   const [actionError, setActionError] = useState("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -278,18 +269,6 @@ function StationList({
       setPanelOpen(false);
     } catch (error) {
       setFormError(errorText(error, "The station could not be saved. Try again."));
-    }
-  };
-
-  const confirmDelete = async () => {
-    if (!toDelete) return;
-    setDeleteError("");
-    try {
-      await deleteStation(toDelete.id).unwrap();
-      setSavedMessage(`${toDelete.name} was deleted.`);
-      setToDelete(null);
-    } catch (error) {
-      setDeleteError(errorText(error, "The station could not be deleted."));
     }
   };
 
@@ -435,19 +414,6 @@ function StationList({
                         >
                           {togglingId === station.id ? "Saving…" : isStationActive(station) ? "Deactivate" : "Activate"}
                         </button>
-                        <button
-                          type="button"
-                          className="table-action table-action--danger"
-                          onClick={() => {
-                            setDeleteError("");
-                            setToDelete(station);
-                          }}
-                          disabled={!canDelete}
-                          data-tooltip={canDelete ? undefined : noAccess("delete stations")}
-                          data-tooltip-kind="access"
-                        >
-                          Delete
-                        </button>
                       </td>
                     </>
                   )}
@@ -572,23 +538,6 @@ function StationList({
           </button>
         </div>
       </SidePanel>
-
-      <ConfirmDialog
-        open={Boolean(toDelete)}
-        title="Delete station?"
-        message={
-          <>
-            <strong>{toDelete?.name}</strong> will be removed and customers will no longer see it. This can’t be undone.
-            {deleteError && <div className="api-state api-state--error">{deleteError}</div>}
-          </>
-        }
-        confirmLabel="Delete station"
-        busyLabel="Deleting…"
-        busy={isDeleting}
-        tone="danger"
-        onConfirm={confirmDelete}
-        onCancel={() => setToDelete(null)}
-      />
     </section>
   );
 }

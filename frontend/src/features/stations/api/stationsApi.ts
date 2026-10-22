@@ -66,11 +66,6 @@ export const stationsApi = baseApi.injectEndpoints({
       ],
     }),
 
-    deleteStation: builder.mutation<Station, string>({
-      query: (id) => ({ url: `/stations/${id}`, method: "DELETE" }),
-      transformResponse: (response: StationResponse) => response.data,
-      invalidatesTags: [{ type: "Station", id: "LIST" }],
-    }),
   }),
 });
 
@@ -78,5 +73,4 @@ export const {
   useGetStationsQuery,
   useCreateStationMutation,
   useUpdateStationMutation,
-  useDeleteStationMutation,
 } = stationsApi;

@@ -30,7 +30,7 @@ type Props = {
   /** Whether the signed-in person may block / unblock users. */
   canUpdateUsers: boolean;
   /** What the signed-in person may do with stations. */
-  stationAccess: { insert: boolean; update: boolean; delete: boolean };
+  stationAccess: { insert: boolean; update: boolean };
   /** Whether the signed-in person may add restaurant categories. */
   canAddRestaurantCategory: boolean;
 };
@@ -92,7 +92,6 @@ export function ManagementView({
         subsection={selectedSubsection}
         canInsert={stationAccess.insert}
         canUpdate={stationAccess.update}
-        canDelete={stationAccess.delete}
       />
     );
   }

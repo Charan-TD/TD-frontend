@@ -46,7 +46,7 @@ export function App() {
   const copy = pageCopy[vm.screen];
   return <AppShell title={copy.title} subtitle={copy.subtitle} {...shellProps}>
     {vm.screen === "dashboard" && <DashboardView access={vm.admin.access} onNavigateManagement={() => vm.navigate("management")} />}
-    {vm.screen === "management" && <ManagementView selectedSubsection={vm.selectedSubsection} canUpdateUsers={can(vm.admin.permissions, "users", "update")} canAddRestaurantCategory={can(vm.admin.permissions, "restaurants", "insert")} stationAccess={{ insert: can(vm.admin.permissions, "stations", "insert"), update: can(vm.admin.permissions, "stations", "update"), delete: can(vm.admin.permissions, "stations", "delete") }} />}
+    {vm.screen === "management" && <ManagementView selectedSubsection={vm.selectedSubsection} canUpdateUsers={can(vm.admin.permissions, "users", "update")} canAddRestaurantCategory={can(vm.admin.permissions, "restaurants", "insert")} stationAccess={{ insert: can(vm.admin.permissions, "stations", "insert"), update: can(vm.admin.permissions, "stations", "update") }} />}
     {vm.screen === "profile" && <ProfileView admin={vm.admin} onEdit={() => vm.navigate("edit-profile")} />}
   </AppShell>;
 }
