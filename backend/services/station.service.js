@@ -207,5 +207,17 @@ export const removeStation = async (id) => {
     );
   }
 
-  return await deleteStation(id);
+  try {
+    return await deleteStation(id);
+  } catch (error) {
+    // 23503 = foreign key violation: the station is still used by train stops.
+    if (error.code === "23503") {
+      throw new AppError(
+        "This station can't be deleted because trains still stop here. Remove it from those train routes first.",
+        409
+      );
+    }
+
+    throw error;
+  }
 };

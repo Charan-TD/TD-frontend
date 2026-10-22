@@ -277,3 +277,79 @@ export const deactivateCustomerUser = async (id) => {
 
   return result.rows[0] || null;
 };
+
+// Get the authenticated customer's own profile
+export const getCustomerProfileById = async (id) => {
+  const query = `
+    SELECT
+      id,
+      phone,
+      email,
+      full_name,
+      profile_image_url,
+      date_of_birth,
+      gender,
+      status,
+      created_at,
+      updated_at,
+      user_type
+    FROM customer_users
+    WHERE id = $1
+      AND user_type = 'CUSTOMER'
+    LIMIT 1
+  `;
+
+  const result = await pool.query(query, [id]);
+
+  return result.rows[0] || null;
+};
+
+// Update the authenticated customer's own profile
+export const updateCustomerProfileById = async (
+  id,
+  {
+    email,
+    full_name,
+    profile_image_url,
+    date_of_birth,
+    gender
+  }
+) => {
+  const query = `
+    UPDATE customer_users
+    SET
+      email = COALESCE($1, email),
+      full_name = COALESCE($2, full_name),
+      profile_image_url = COALESCE($3, profile_image_url),
+      date_of_birth = COALESCE($4, date_of_birth),
+      gender = COALESCE($5, gender),
+      updated_at = NOW()
+    WHERE id = $6
+      AND user_type = 'CUSTOMER'
+    RETURNING
+      id,
+      phone,
+      email,
+      full_name,
+      profile_image_url,
+      date_of_birth,
+      gender,
+      status,
+      created_at,
+      updated_at,
+      user_type
+  `;
+
+  const values = [
+    email ?? null,
+    full_name ?? null,
+    profile_image_url ?? null,
+    date_of_birth ?? null,
+    gender ?? null,
+    id
+  ];
+
+  const result = await pool.query(query, values);
+
+  return result.rows[0] || null;
+};

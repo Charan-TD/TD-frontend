@@ -28,7 +28,8 @@ export const authenticate = async (req, res, next) => {
 
     // 4. Make sure this is an employee access token
     if (
-      decoded.user_type !== "employee" ||
+      (decoded.user_type !== "employee" &&
+      decoded.user_type !== "customer" ) ||
       decoded.token_type !== "access"
     ) {
       return res.status(401).json({

@@ -1,108 +1,133 @@
-import crypto from "crypto";
+
+import crypto from "node:crypto";
 
 import pool from "../config/database.js";
 import { findEmployeeByEmail } from "../repositories/auth.repository.js";
-import { hashPassword } from "./password.service.js";
+import {
+  hashPassword,
+  verifyPassword
+} from "./password.service.js";
 import { AppError } from "../utils/app-error.js";
 
+const RESET_TOKEN_EXPIRY_MINUTES = 15;
+const RESET_TOKEN_EXPIRY_SECONDS = 900;
 
-// Generate a secure random reset token
-const generateResetToken = () => {
-  return crypto.randomBytes(32).toString("hex");
-};
+const generateResetToken = () =>
+  crypto.randomBytes(32).toString("hex");
 
-
-// Hash the reset token before storing it
-const hashResetToken = (token) => {
-  return crypto
+const hashResetToken = (token) =>
+  crypto
     .createHash("sha256")
     .update(token)
     .digest("hex");
+
+const validateNewPassword = (password) => {
+  if (
+    typeof password !== "string" ||
+    password.length < 8 ||
+    password.length > 128
+  ) {
+    throw new AppError(
+      "New password must be between 8 and 128 characters",
+      400
+    );
+  }
 };
 
-
-// Request employee password reset
+// POST /api/v1/auth/employee/forgot-password
 export const requestEmployeePasswordReset = async (email) => {
-  const employee = await findEmployeeByEmail(email);
+  if (typeof email !== "string" || !email.trim()) {
+    throw new AppError("Valid email is required", 400);
+  }
 
-  /*
-   * Do not reveal whether an email exists.
-   * This prevents account enumeration.
-   */
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const employee = await findEmployeeByEmail(
+    normalizedEmail
+  );
+
+  const message =
+    "If an account exists with this email, password reset instructions have been generated.";
+
   if (!employee || employee.status !== "active") {
-    return;
+    return { message };
   }
 
   const resetToken = generateResetToken();
   const tokenHash = hashResetToken(resetToken);
 
   const expiresAt = new Date(
-    Date.now() + 15 * 60 * 1000
+    Date.now() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000
   );
 
-  // Invalidate previous unused reset tokens
-  await pool.query(
-    `
-    UPDATE employee_password_resets
-    SET used_at = now()
-    WHERE employee_id = $1
-      AND used_at IS NULL
-    `,
-    [employee.id]
-  );
+  const client = await pool.connect();
 
-  // Store only the hash
-  await pool.query(
-    `
-    INSERT INTO employee_password_resets (
-      employee_id,
-      token_hash,
-      expires_at
-    )
-    VALUES ($1, $2, $3)
-    `,
-    [
-      employee.id,
-      tokenHash,
-      expiresAt
-    ]
-  );
+  try {
+    await client.query("BEGIN");
 
-  /*
-   * Development only:
-   * Return the raw token temporarily so we can test
-   * the complete flow before connecting email/SMS.
-   *
-   * Remove this before production.
-   */
+    // Invalidate previous unused tokens.
+    await client.query(
+      `
+      UPDATE employee_password_resets
+      SET used_at = NOW()
+      WHERE employee_id = $1
+        AND used_at IS NULL
+      `,
+      [employee.id]
+    );
+
+    // Store the token hash, never the raw token.
+    await client.query(
+      `
+      INSERT INTO employee_password_resets (
+        employee_id,
+        token_hash,
+        expires_at
+      )
+      VALUES ($1, $2, $3)
+      `,
+      [
+        employee.id,
+        tokenHash,
+        expiresAt
+      ]
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
   return {
-    resetToken
+    message,
+    ...(process.env.NODE_ENV !== "production" && {
+      data: {
+        resetToken,
+        expiresIn: RESET_TOKEN_EXPIRY_SECONDS
+      }
+    })
   };
 };
 
-
-// Reset employee password
+// POST /api/v1/auth/employee/reset-password
 export const resetEmployeePassword = async ({
   token,
   newPassword
 }) => {
-  if (!token) {
+  if (
+    typeof token !== "string" ||
+    !/^[a-fA-F0-9]{64}$/.test(token)
+  ) {
     throw new AppError(
-      "Reset token is required",
+      "Valid reset token is required",
       400
     );
   }
 
-  if (
-    !newPassword ||
-    typeof newPassword !== "string" ||
-    newPassword.length < 8
-  ) {
-    throw new AppError(
-      "Password must be at least 8 characters",
-      400
-    );
-  }
+  validateNewPassword(newPassword);
 
   const tokenHash = hashResetToken(token);
 
@@ -156,7 +181,8 @@ export const resetEmployeePassword = async ({
       `
       SELECT
         id,
-        status
+        status,
+        password_hash
       FROM employees
       WHERE id = $1
       LIMIT 1
@@ -181,6 +207,18 @@ export const resetEmployeePassword = async ({
       );
     }
 
+    const samePassword = await verifyPassword(
+      newPassword,
+      employee.password_hash
+    );
+
+    if (samePassword) {
+      throw new AppError(
+        "New password must be different from current password",
+        400
+      );
+    }
+
     const passwordHash = await hashPassword(
       newPassword
     );
@@ -190,7 +228,8 @@ export const resetEmployeePassword = async ({
       UPDATE employees
       SET
         password_hash = $1,
-        updated_at = now()
+        updated_at = NOW(),
+        token_version = token_version + 1
       WHERE id = $2
       `,
       [
@@ -199,17 +238,22 @@ export const resetEmployeePassword = async ({
       ]
     );
 
-    // Mark reset token as used
+    // Invalidate all outstanding reset tokens.
     await client.query(
       `
       UPDATE employee_password_resets
-      SET used_at = now()
-      WHERE id = $1
+      SET used_at = NOW()
+      WHERE employee_id = $1
+        AND used_at IS NULL
       `,
-      [resetRequest.id]
+      [employee.id]
     );
 
     await client.query("COMMIT");
+
+    return {
+      message: "Employee password reset successfully"
+    };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

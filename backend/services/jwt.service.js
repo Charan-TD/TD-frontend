@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import "dotenv/config";
 
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
@@ -26,11 +27,17 @@ if (ACCESS_SECRET === REFRESH_SECRET) {
 
 // Generate access token
 export const generateAccessToken = (payload) => {
+  if (
+    payload.user_type === "employee" &&
+    payload.token_version === undefined
+  ) {
+    throw new Error(
+      "token_version is required for employee access tokens"
+    );
+  }
+
   return jwt.sign(
-    {
-      ...payload,
-      token_version: payload.token_version
-    },
+    payload,
     ACCESS_SECRET,
     {
       expiresIn: ACCESS_EXPIRES_IN
@@ -39,11 +46,17 @@ export const generateAccessToken = (payload) => {
 };
 
 export const generateRefreshToken = (payload) => {
+  if (
+    payload.user_type === "employee" &&
+    payload.token_version === undefined
+  ) {
+    throw new Error(
+      "token_version is required for employee refresh tokens"
+    );
+  }
+
   return jwt.sign(
-    {
-      ...payload,
-      token_version: payload.token_version
-    },
+    payload,
     REFRESH_SECRET,
     {
       expiresIn: REFRESH_EXPIRES_IN

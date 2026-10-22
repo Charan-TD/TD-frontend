@@ -10,16 +10,30 @@ export const getEmployees = async ({ page = 1, limit = 20 }) => {
 
   const dataQuery = `
     SELECT
-      id,
-      emp_id,
-      name,
-      email,
-      status,
-      profile_img_url,
-      created_at,
-      updated_at
-    FROM employees
-    ORDER BY created_at DESC
+      e.id,
+      e.emp_id,
+      e.name,
+      e.email,
+      e.status,
+      e.profile_img_url,
+      e.created_at,
+      e.updated_at,
+      r.id AS role_id,
+      r.role_name AS role
+    FROM employees e
+    LEFT JOIN LATERAL (
+      SELECT
+        er.role_id
+      FROM employee_roles er
+      WHERE er.employee_id = e.id
+        AND er.status = 'active'
+      ORDER BY er.created_at DESC
+      LIMIT 1
+    ) er
+      ON TRUE
+    LEFT JOIN roles r
+      ON r.id = er.role_id
+    ORDER BY e.created_at DESC
     LIMIT $1
     OFFSET $2
   `;

@@ -5,12 +5,29 @@ export type Station = {
   name: string;
   code: string | null;
   city: string | null;
+  state?: string | null;
+  // Postgres can return decimals as strings, so both are accepted.
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  created_at?: string | null;
+};
+
+/** Fields accepted by POST /stations (and, all optional, by PUT /stations/:id). */
+export type StationInput = {
+  name: string;
+  code: string;
+  city: string;
+  state: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 type StationList = {
   stations: Station[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
 };
+
+type StationResponse = { success: boolean; data: Station };
 
 export const stationsApi = baseApi.injectEndpoints({
   overrideExisting: true,
@@ -30,7 +47,33 @@ export const stationsApi = baseApi.injectEndpoints({
             ]
           : [{ type: "Station" as const, id: "LIST" }],
     }),
+
+    createStation: builder.mutation<Station, StationInput>({
+      query: (body) => ({ url: "/stations", method: "POST", body }),
+      transformResponse: (response: StationResponse) => response.data,
+      invalidatesTags: [{ type: "Station", id: "LIST" }],
+    }),
+
+    updateStation: builder.mutation<Station, { id: string; changes: Partial<StationInput> }>({
+      query: ({ id, changes }) => ({ url: `/stations/${id}`, method: "PUT", body: changes }),
+      transformResponse: (response: StationResponse) => response.data,
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: "Station", id },
+        { type: "Station", id: "LIST" },
+      ],
+    }),
+
+    deleteStation: builder.mutation<Station, string>({
+      query: (id) => ({ url: `/stations/${id}`, method: "DELETE" }),
+      transformResponse: (response: StationResponse) => response.data,
+      invalidatesTags: [{ type: "Station", id: "LIST" }],
+    }),
   }),
 });
 
-export const { useGetStationsQuery } = stationsApi;
+export const {
+  useGetStationsQuery,
+  useCreateStationMutation,
+  useUpdateStationMutation,
+  useDeleteStationMutation,
+} = stationsApi;

@@ -3,7 +3,8 @@ import {
   getRestaurant,
   createRestaurantService,
   updateRestaurantService,
-  deleteRestaurant
+  deleteRestaurant,
+  reviewRestaurantRegistration
 } from "../services/restaurant.service.js";
 
 // GET /api/v1/restaurants
@@ -118,6 +119,52 @@ export const deleteRestaurantController = async (
       success: true,
       message: "Restaurant deactivated successfully",
       data: restaurant
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const approveRestaurantRegistration = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const result = await reviewRestaurantRegistration(
+      req.params.id,
+      "approve",
+      undefined,
+      req.user.id
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Restaurant registration approved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const rejectRestaurantRegistration = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const result = await reviewRestaurantRegistration(
+      req.params.id,
+      "reject",
+      req.body?.rejection_reason,
+      req.user.id
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Restaurant registration rejected successfully",
+      data: result
     });
   } catch (error) {
     next(error);

@@ -22,17 +22,24 @@ import { useGetRestaurantsQuery, type Restaurant } from "../../restaurants/api/r
 import { RestaurantApprovalsView } from "./RestaurantApprovalsView";
 import { RestaurantDetailsView } from "./RestaurantDetailsView";
 import { useGetOrdersQuery } from "../../orders/api/ordersApi";
-import { useGetStationsQuery } from "../../stations/api/stationsApi";
+import { StationsView } from "../../stations/views/StationsView";
+import { AddCategoryPanel } from "../../restaurants/views/AddCategoryPanel";
 
 type Props = {
   selectedSubsection: string;
   /** Whether the signed-in person may block / unblock users. */
   canUpdateUsers: boolean;
+  /** What the signed-in person may do with stations. */
+  stationAccess: { insert: boolean; update: boolean; delete: boolean };
+  /** Whether the signed-in person may add restaurant categories. */
+  canAddRestaurantCategory: boolean;
 };
 
 export function ManagementView({
   selectedSubsection,
   canUpdateUsers,
+  stationAccess,
+  canAddRestaurantCategory,
 }: Props) {
   const section =
     selectedSubsection.split("-")[0] || "users";
@@ -58,6 +65,7 @@ export function ManagementView({
     return (
       <RestaurantWorkspace
         subsection={selectedSubsection}
+        canAddCategory={canAddRestaurantCategory}
       />
     );
   }
@@ -80,8 +88,11 @@ export function ManagementView({
 
   if (section === "stations") {
     return (
-      <StationWorkspace
+      <StationsView
         subsection={selectedSubsection}
+        canInsert={stationAccess.insert}
+        canUpdate={stationAccess.update}
+        canDelete={stationAccess.delete}
       />
     );
   }
@@ -824,64 +835,12 @@ function ReportsWorkspace({
   );
 }
 
-function StationWorkspace({
-  subsection,
-}: {
-  subsection: string;
-}) {
-  const {
-    data: stations = [],
-    isLoading,
-    isFetching,
-    isError,
-    refetch,
-  } = useGetStationsQuery();
-
-  if (subsection === "stations-inactive") {
-    return (
-      <ComingSoonPanel
-        eyebrow="STATIONS"
-        title="Inactive / Suspended"
-        description="The current stations API does not expose a status field, so inactive filtering is not connected yet."
-      />
-    );
-  }
-
-  if (subsection === "stations-performance") {
-    return (
-      <ComingSoonPanel
-        eyebrow="STATIONS"
-        title="Performance"
-        description="Station performance data is not connected to an API yet."
-      />
-    );
-  }
-
-  const rows = stations.map((station) => [
-    station.name,
-    station.code ?? "—",
-    station.city ?? "—",
-  ]);
-
-  return (
-    <OperationalWorkspace
-      title="All Stations"
-      eyebrow="ALL STATIONS"
-      description="Stations available in the current database response."
-      rows={rows}
-      columns={["Station", "Code", "City"]}
-      loading={isLoading}
-      error={isError}
-      onRefresh={() => refetch()}
-      refreshing={isFetching}
-    />
-  );
-}
-
 function RestaurantWorkspace({
   subsection,
+  canAddCategory,
 }: {
   subsection: string;
+  canAddCategory: boolean;
 }) {
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<Restaurant | null>(null);
@@ -964,6 +923,7 @@ function RestaurantWorkspace({
     <RestaurantList
       restaurants={restaurants}
       onSelect={setSelectedRestaurant}
+      canAddCategory={canAddCategory}
       loading={isLoading}
       error={isError}
       errorDetail={describeQueryError(queryError)}
@@ -982,6 +942,7 @@ function describeQueryError(error: unknown): string | undefined {
 function RestaurantList({
   restaurants,
   onSelect,
+  canAddCategory,
   loading,
   error,
   errorDetail,
@@ -990,6 +951,7 @@ function RestaurantList({
 }: {
   restaurants: Restaurant[];
   onSelect: (restaurant: Restaurant) => void;
+  canAddCategory: boolean;
   loading: boolean;
   error: boolean;
   errorDetail?: string;
@@ -997,6 +959,7 @@ function RestaurantList({
   refreshing: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [categoryPanelOpen, setCategoryPanelOpen] = useState(false);
   const term = search.trim().toLowerCase();
   const matching = term
     ? restaurants.filter((restaurant) => restaurant.name.toLowerCase().includes(term))
@@ -1013,8 +976,22 @@ function RestaurantList({
           </p>
         </div>
 
-        <RefreshButton refreshing={refreshing} label="the restaurants" onRefresh={onRefresh} />
+        <div className="employee-header-actions">
+          <RefreshButton refreshing={refreshing} label="the restaurants" onRefresh={onRefresh} />
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setCategoryPanelOpen(true)}
+            disabled={!canAddCategory}
+            data-tooltip={canAddCategory ? undefined : noAccess("add categories")}
+            data-tooltip-kind="access"
+          >
+            Add category
+          </button>
+        </div>
       </header>
+
+      <AddCategoryPanel open={categoryPanelOpen} onClose={() => setCategoryPanelOpen(false)} />
 
       <div className="workspace-stat-row">
         <div>

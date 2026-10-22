@@ -3,19 +3,35 @@ import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
+import { authenticateRestaurant } from "./middleware/restaurantAuthenticate.js";
+
 import employeeRoleRoutes from "./routes/employee-role.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import employeeRoutes from "./routes/employee.routes.js";
 import permissionRoutes from "./routes/permission.routes.js";
 import customerUserRoutes from "./routes/customer-user.routes.js";
 import restaurantRoutes from "./routes/restaurant.routes.js";
+import restaurantRegistrationRoutes from "./routes/restaurantRegistration.routes.js";
 import stationRoutes from "./routes/station.routes.js";
 import deliveryPartnerUserRoutes from "./routes/delivery-partner-user.routes.js";
 import orderRoutes from "./routes/order.routes.js";
 import roleRoutes from "./routes/role.routes.js";
+import customerAuthRoutes from "./routes/customerAuth.routes.js";
+import customerProfileRoutes from "./routes/customer-profile.routes.js";
+import restaurantAuthRoutes from "./routes/restaurantAuth.routes.js";
+import cuisineRoutes from "./routes/cuisine.routes.js";
+import menuItemRoutes from "./routes/menu-item.routes.js";
+import restaurantProfileRoutes from "./routes/restaurantProfile.routes.js";
+import adminRestaurantProfileRoutes from "./routes/adminRestaurantProfile.routes.js";
+import adminRestaurantRegistrationRoutes from "./routes/adminRestaurantRegistration.routes.js";
+import adminRestaurantRoutes from "./routes/adminRestaurant.routes.js";
+import adminCategoryRoutes from "./routes/admin-category.routes.js";
+import nearbyRestaurantRoutes from "./routes/nearby-restaurant.routes.js";
+import addonRoutes from "./routes/addon.routes.js";
 
-import swaggerSpec from "./config/swagger.js";
-
+import swaggerSpec, {
+  loadStationDropdownIntoSwagger
+} from "./config/swagger.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -41,6 +57,8 @@ app.get("/health", (req, res) => {
   });
 });
 
+await loadStationDropdownIntoSwagger();
+
 // Swagger API documentation
 app.use(
   "/api-docs",
@@ -52,6 +70,8 @@ app.use(
 app.use("/api/v1/auth", authRoutes);
 
 app.use("/api/v1/employees", employeeRoutes);
+
+app.use("/api/v1", nearbyRestaurantRoutes);
 
 
 
@@ -67,6 +87,11 @@ app.use(
 
 app.use("/api/v1/restaurants", restaurantRoutes);
 
+app.use(
+  "/api/v1/restaurants/registration",
+  restaurantRegistrationRoutes
+);
+
 app.use("/api/v1/customer-users", customerUserRoutes);
 
 app.use("/api/v1/stations", stationRoutes);
@@ -79,6 +104,54 @@ app.use(
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/roles", roleRoutes);
 
+app.use(
+  "/api/v1/auth/customer",
+  customerAuthRoutes
+);
+
+app.use(
+  "/api/v1/customer",
+  customerProfileRoutes
+);
+
+app.use(
+  "/api/v1/auth/restaurant",
+  restaurantAuthRoutes
+);
+
+app.use(
+  "/api/v1/cuisines",
+  cuisineRoutes
+);
+
+app.use(
+  "/api/v1/menu-items",
+  menuItemRoutes
+);
+
+app.use(
+  "/api/v1/restaurant/profile",
+  restaurantProfileRoutes
+);
+
+app.use(
+  "/api/v1/admin/restaurant-profile-requests",
+  adminRestaurantProfileRoutes
+);
+
+app.use(
+  "/api/v1/admin/restaurant-registration-requests",
+  adminRestaurantRegistrationRoutes
+);
+
+app.use("/api/v1/admin/restaurants", adminRestaurantRoutes);
+app.use("/api/v1/admin/categories", adminCategoryRoutes);
+
+app.use(
+  "/api/v1",
+  authenticateRestaurant,
+  addonRoutes
+);
 
 // Error handler must be the LAST middleware
 app.use(errorHandler);

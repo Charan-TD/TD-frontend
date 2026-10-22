@@ -1,4 +1,4 @@
-import pool from "../config/database.js";
+import { getEmployeeAuthorization } from "../repositories/auth.repository.js";
 
 export const authorize = (resource, action) => {
   return async (req, res, next) => {
@@ -18,29 +18,15 @@ export const authorize = (resource, action) => {
         });
       }
 
-      const query = `
-        SELECT
-          r.id AS role_id,
-          r.role_name,
-          r.permission_code
-        FROM employee_roles er
-        INNER JOIN roles r
-          ON r.id = er.role_id
-        WHERE er.employee_id = $1
-          AND er.status = 'active'
-        LIMIT 1
-      `;
+      // Combined permissions of every active role the employee holds.
+      const role = await getEmployeeAuthorization(req.user.id);
 
-      const result = await pool.query(query, [req.user.id]);
-
-      if (result.rows.length === 0) {
+      if (!role) {
         return res.status(403).json({
           success: false,
           message: "No active role assigned"
         });
       }
-
-      const role = result.rows[0];
 
       const permissionCode = role.permission_code || {};
 

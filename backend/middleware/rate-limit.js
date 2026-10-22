@@ -27,3 +27,14 @@ export const employeeRefreshLimiter = rateLimit({
     message: "Too many token refresh requests. Please try again later."
   }
 });
+
+export const restaurantPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many password requests. Please try again later."
+  }
+});

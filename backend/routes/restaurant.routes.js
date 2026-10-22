@@ -53,10 +53,83 @@ const router = express.Router();
  *         name: status
  *         schema:
  *           type: string
- *           enum: [ACTIVE, INACTIVE]
+ *           enum: [ACTIVE, ACCEPTED, INACTIVE, PENDING, REJECTED]
  *     responses:
  *       200:
  *         description: Restaurants retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     restaurants:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           name:
+ *                             type: string
+ *                           owner_name:
+ *                             type: string
+ *                           owner_mobile:
+ *                             type: string
+ *                           restaurant_type:
+ *                             type: string
+ *                           restaurant_email:
+ *                             type: string
+ *                           restaurant_contact:
+ *                             type: string
+ *                           pan:
+ *                             type: string
+ *                             nullable: true
+ *                           gstin:
+ *                             type: string
+ *                             nullable: true
+ *                           fssai_number:
+ *                             type: string
+ *                             nullable: true
+ *                           fssai_valid_until:
+ *                             type: string
+ *                             format: date
+ *                             nullable: true
+ *                           status:
+ *                             type: string
+ *                             enum: [ACTIVE, ACCEPTED, INACTIVE, PENDING, REJECTED]
+ *                           online_status:
+ *                             type: string
+ *                             enum: [OPEN, CLOSED]
+ *                             description: Calculated from operating_hours using the current time in Asia/Kolkata.
+ *                           rating:
+ *                             type: number
+ *                             example: 4.5
+ *                             description: Placeholder rating value; not yet backed by customer reviews.
+ *                           created_at:
+ *                             type: string
+ *                             format: date-time
+ *                           updated_at:
+ *                             type: string
+ *                             format: date-time
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: integer
+ *                         limit:
+ *                           type: integer
+ *                         total:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
  *       401:
  *         description: Unauthorized
  *       403:
@@ -88,6 +161,96 @@ router.get(
  *     responses:
  *       200:
  *         description: Restaurant retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   description: Restaurant registration details, bank information, and signed document URLs.
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     name:
+ *                       type: string
+ *                     restaurant_type:
+ *                       type: string
+ *                     cuisines:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     food_served:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     latitude:
+ *                       type: number
+ *                       nullable: true
+ *                     longitude:
+ *                       type: number
+ *                       nullable: true
+ *                     city:
+ *                       type: string
+ *                       nullable: true
+ *                     state:
+ *                       type: string
+ *                       nullable: true
+ *                     pincode:
+ *                       type: string
+ *                       nullable: true
+ *                     operating_hours:
+ *                       type: object
+ *                       nullable: true
+ *                     online_status:
+ *                       type: string
+ *                       enum: [OPEN, CLOSED]
+ *                       description: Calculated from operating_hours using the current time in Asia/Kolkata.
+ *                     rating:
+ *                       type: number
+ *                       example: 4.5
+ *                       description: Placeholder rating value; not yet backed by customer reviews.
+ *                     account_holder_name:
+ *                       type: string
+ *                       nullable: true
+ *                     account_number:
+ *                       type: string
+ *                       nullable: true
+ *                     ifsc:
+ *                       type: string
+ *                       nullable: true
+ *                     bank_name:
+ *                       type: string
+ *                       nullable: true
+ *                     logo_url:
+ *                       type: string
+ *                       nullable: true
+ *                     cover_url:
+ *                       type: string
+ *                       nullable: true
+ *                     pan_document_url:
+ *                       type: string
+ *                       nullable: true
+ *                     gst_document_url:
+ *                       type: string
+ *                       nullable: true
+ *                     fssai_document_url:
+ *                       type: string
+ *                       nullable: true
+ *                     business_proof_document_url:
+ *                       type: string
+ *                       nullable: true
+ *                     aadhaar_document_url:
+ *                       type: string
+ *                       nullable: true
+ *                     bank_proof_url:
+ *                       type: string
+ *                       nullable: true
  *       400:
  *         description: Invalid restaurant ID
  *       401:
@@ -121,13 +284,11 @@ router.get(
  *             type: object
  *             required:
  *               - name
- *               - business_type
+ *               - restaurant_type
  *             properties:
  *               name:
  *                 type: string
- *               business_type:
- *                 type: string
- *               legal_name:
+ *               restaurant_type:
  *                 type: string
  *               pan:
  *                 type: string
@@ -138,26 +299,29 @@ router.get(
  *               fssai_valid_until:
  *                 type: string
  *                 format: date
- *               bank_account_number:
+ *               account_number:
  *                 type: string
- *               bank_ifsc:
+ *               ifsc:
  *                 type: string
- *               bank_account_holder:
+ *               account_holder_name:
  *                 type: string
+ *               bank_proof_id:
+ *                 type: string
+ *                 description: Storage path of the bank proof document
  *               status:
  *                 type: string
- *                 enum: [ACTIVE, INACTIVE]
+ *                 enum: [ACTIVE, ACCEPTED, INACTIVE, PENDING, REJECTED]
  *             example:
  *               name: "Railway Spice Kitchen"
- *               business_type: "RESTAURANT"
- *               legal_name: "Railway Spice Kitchen Pvt Ltd"
+ *               restaurant_type: "restaurant"
  *               pan: "ABCDE1234F"
  *               gstin: "36ABCDE1234F1Z5"
  *               fssai_number: "12345678901234"
  *               fssai_valid_until: "2027-12-31"
- *               bank_account_number: "1234567890"
- *               bank_ifsc: "SBIN0001234"
- *               bank_account_holder: "Railway Spice Kitchen Pvt Ltd"
+ *               account_number: "1234567890"
+ *               ifsc: "SBIN0001234"
+ *               account_holder_name: "Railway Spice Kitchen Pvt Ltd"
+ *               bank_proof_id: "registrations/{registrationId}/bank_proof/{fileName}.pdf"
  *               status: "ACTIVE"
  *     responses:
  *       201:
@@ -184,6 +348,7 @@ router.post(
  * /api/v1/restaurants/{id}:
  *   put:
  *     summary: Update restaurant
+ *     description: Restaurant type is set during registration and cannot be changed.
  *     tags: [Restaurants]
  *     security:
  *       - bearerAuth: []
@@ -203,10 +368,6 @@ router.post(
  *             properties:
  *               name:
  *                 type: string
- *               business_type:
- *                 type: string
- *               legal_name:
- *                 type: string
  *               pan:
  *                 type: string
  *               gstin:
@@ -216,15 +377,18 @@ router.post(
  *               fssai_valid_until:
  *                 type: string
  *                 format: date
- *               bank_account_number:
+ *               account_number:
  *                 type: string
- *               bank_ifsc:
+ *               ifsc:
  *                 type: string
- *               bank_account_holder:
+ *               account_holder_name:
  *                 type: string
+ *               bank_proof_id:
+ *                 type: string
+ *                 description: Storage path of the bank proof document
  *               status:
  *                 type: string
- *                 enum: [ACTIVE, INACTIVE]
+ *                 enum: [ACTIVE, ACCEPTED, INACTIVE, PENDING, REJECTED]
  *     responses:
  *       200:
  *         description: Restaurant updated successfully

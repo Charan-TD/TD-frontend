@@ -3,7 +3,9 @@ import {
   getCustomerUser,
   createCustomer,
   updateCustomer,
-  deleteCustomer
+  deleteCustomer,
+  getMyCustomerProfile,
+  updateMyCustomerProfile
 } from "../services/customer-user.service.js";
 
 // GET /api/v1/customer-users
@@ -117,3 +119,42 @@ export const deleteCustomerUser = async (
     next(error);
   }
 };
+
+// GET /api/v1/customer/profile
+export const getMyProfile = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const customer =
+      await getMyCustomerProfile(req.customer.id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Customer profile retrieved successfully",
+      data: customer
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/v1/customer/profile
+export const updateMyProfile = async (req, res, next) => {
+  try {
+    const customer = await updateMyCustomerProfile(
+      req.customer.id,
+      req.body,
+      req.file || null
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Customer profile updated successfully",
+      data: customer
+    });
+  } catch (error) {
+    next(error);
+  }
+}; 

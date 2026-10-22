@@ -1,6 +1,8 @@
+
 import {
   loginEmployee,
-  refreshEmployeeAccessToken
+  refreshEmployeeAccessToken,
+  changeEmployeePassword
 } from "../services/auth.service.js";
 
 import {
@@ -8,10 +10,7 @@ import {
   resetEmployeePassword
 } from "../services/password-reset.service.js";
 
-import {
-  changeEmployeePassword
-} from "../services/auth.service.js";
-
+// POST /api/v1/auth/employee/login
 export const employeeLogin = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -23,12 +22,12 @@ export const employeeLogin = async (req, res, next) => {
       message: "Employee login successful",
       data: result
     });
-
   } catch (error) {
     next(error);
   }
 };
 
+// GET /api/v1/auth/employee/me
 export const getCurrentEmployee = async (req, res) => {
   return res.status(200).json({
     success: true,
@@ -39,41 +38,51 @@ export const getCurrentEmployee = async (req, res) => {
   });
 };
 
+// POST /api/v1/auth/employee/refresh
 export const refreshEmployeeToken = async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
 
-    const result =
-      await refreshEmployeeAccessToken(refreshToken);
+    const result = await refreshEmployeeAccessToken(
+      refreshToken
+    );
 
     return res.status(200).json({
       success: true,
       message: "Access token refreshed successfully",
       data: result
     });
-
   } catch (error) {
     next(error);
   }
 };
 
-export const forgotEmployeePassword = async (req, res, next) => {
+// POST /api/v1/auth/employee/forgot-password
+export const forgotEmployeePassword = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { email } = req.body;
 
-    await requestEmployeePasswordReset(email);
+    const result = await requestEmployeePasswordReset(
+      email
+    );
 
     return res.status(200).json({
       success: true,
-      message:
-        "If an account exists with this email, password reset instructions have been generated."
+      message: result.message,
+      ...(result.data && {
+        data: result.data
+      })
     });
   } catch (error) {
     next(error);
   }
 };
 
-
+// POST /api/v1/auth/employee/reset-password
 export const resetEmployeePasswordController = async (
   req,
   res,
@@ -81,82 +90,24 @@ export const resetEmployeePasswordController = async (
 ) => {
   try {
     const {
+      email,
       token,
       newPassword
     } = req.body;
 
-    await resetEmployeePassword({
+    const result = await resetEmployeePassword({
+      email,
       token,
       newPassword
     });
 
     return res.status(200).json({
       success: true,
-      message: "Password reset successfully"
+      message: result.message
     });
   } catch (error) {
     next(error);
   }
-};
-
-export const validateForgotEmployeePassword = (req, res, next) => {
-  const { email } = req.body;
-
-  if (!email || typeof email !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "Valid email is required"
-    });
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  if (!emailRegex.test(normalizedEmail)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid email format"
-    });
-  }
-
-  req.body.email = normalizedEmail;
-
-  next();
-};
-
-
-export const validateResetEmployeePassword = (req, res, next) => {
-  const {
-    token,
-    newPassword
-  } = req.body;
-
-  if (!token || typeof token !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "Reset token is required"
-    });
-  }
-
-  if (
-    !newPassword ||
-    typeof newPassword !== "string"
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: "New password is required"
-    });
-  }
-
-  if (newPassword.length < 8) {
-    return res.status(400).json({
-      success: false,
-      message: "Password must be at least 8 characters"
-    });
-  }
-
-  next();
 };
 
 // POST /api/v1/auth/employee/change-password
@@ -171,12 +122,11 @@ export const changePassword = async (
       new_password
     } = req.body;
 
-    const result =
-      await changeEmployeePassword(
-        req.user.id,
-        current_password,
-        new_password
-      );
+    const result = await changeEmployeePassword(
+      req.user.id,
+      current_password,
+      new_password
+    );
 
     return res.status(200).json({
       success: true,

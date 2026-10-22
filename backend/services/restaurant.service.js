@@ -1,19 +1,43 @@
 import {
   getRestaurants,
   findRestaurantById,
+  findRestaurantReviewDetailsById,
   findRestaurantByPan,
   findRestaurantByGstin,
   createRestaurant,
   updateRestaurant,
-  deactivateRestaurant
+  deactivateRestaurant,
+  decideRestaurantRegistration
 } from "../repositories/restaurant.repository.js";
 
 import { AppError } from "../utils/app-error.js";
+import { getRestaurantOnlineStatus } from "../utils/restaurant-online-status.js";
+import {
+  generateSignedUrl,
+  StorageObjectNotFoundError
+} from "./storage.service.js";
 
 const ALLOWED_STATUSES = [
   "ACTIVE",
-  "INACTIVE"
+  "ACCEPTED",
+  "INACTIVE",
+  "PENDING",
+  "REJECTED"
 ];
+
+const DOCUMENT_URL_FIELDS = {
+  logo_id: "logo_url",
+  cover_id: "cover_url",
+  pan_document_id: "pan_document_url",
+  gst_document_id: "gst_document_url",
+  fssai_document_id: "fssai_document_url",
+  business_proof_document_id: "business_proof_document_url",
+  aadhaar_document_id: "aadhaar_document_url",
+  bank_proof_id: "bank_proof_url"
+};
+
+const DOCUMENT_BUCKET = "restaurant-registration-documents";
+const SAMPLE_RESTAURANT_RATING = 4.5;
 
 // List restaurants
 export const listRestaurants = async ({
@@ -21,6 +45,10 @@ export const listRestaurants = async ({
   limit = 20,
   status
 }) => {
+  if (status && !ALLOWED_STATUSES.includes(status.toUpperCase())) {
+    throw new AppError("Invalid restaurant status", 400);
+  }
+
   const result = await getRestaurants({
     page,
     limit,
@@ -28,7 +56,14 @@ export const listRestaurants = async ({
   });
 
   return {
-    restaurants: result.rows,
+    restaurants: result.rows.map(({
+      operating_hours: operatingHours,
+      ...restaurant
+    }) => ({
+      ...restaurant,
+      online_status: getRestaurantOnlineStatus(operatingHours),
+      rating: SAMPLE_RESTAURANT_RATING
+    })),
     pagination: {
       page: Number(page),
       limit: Number(limit),
@@ -43,7 +78,7 @@ export const listRestaurants = async ({
 // Get restaurant by ID
 export const getRestaurant = async (id) => {
   const restaurant =
-    await findRestaurantById(id);
+    await findRestaurantReviewDetailsById(id);
 
   if (!restaurant) {
     throw new AppError(
@@ -52,7 +87,42 @@ export const getRestaurant = async (id) => {
     );
   }
 
-  return restaurant;
+  await Promise.all(
+    Object.entries(DOCUMENT_URL_FIELDS).map(
+      async ([documentIdField, urlField]) => {
+        const documentId = restaurant[documentIdField];
+        if (!documentId) {
+          restaurant[urlField] = null;
+          return;
+        }
+
+        try {
+          restaurant[urlField] = await generateSignedUrl(
+            DOCUMENT_BUCKET,
+            documentId
+          );
+        } catch (error) {
+          if (!(error instanceof StorageObjectNotFoundError)) {
+            throw error;
+          }
+
+          console.warn(
+            `Restaurant review document not found in storage: ${documentIdField}`,
+            { restaurantId: id }
+          );
+          restaurant[urlField] = null;
+        }
+      }
+    )
+  );
+
+  return {
+    ...restaurant,
+    online_status: getRestaurantOnlineStatus(
+      restaurant.operating_hours
+    ),
+    rating: SAMPLE_RESTAURANT_RATING
+  };
 };
 
 // Create restaurant
@@ -61,7 +131,7 @@ export const createRestaurantService = async (
 ) => {
   const {
     name,
-    business_type,
+    restaurant_type,
     pan,
     gstin
   } = data;
@@ -74,11 +144,11 @@ export const createRestaurantService = async (
   }
 
   if (
-    !business_type ||
-    business_type.trim().length === 0
+    !restaurant_type ||
+    restaurant_type.trim().length === 0
   ) {
     throw new AppError(
-      "Business type is required",
+      "Restaurant type is required",
       400
     );
   }
@@ -117,6 +187,13 @@ export const updateRestaurantService = async (
   id,
   data
 ) => {
+  if (data.restaurant_type !== undefined) {
+    throw new AppError(
+      "Restaurant type cannot be modified after registration",
+      400
+    );
+  }
+
   const existingRestaurant =
     await findRestaurantById(id);
 
@@ -134,17 +211,6 @@ export const updateRestaurantService = async (
   ) {
     throw new AppError(
       "Restaurant name cannot be empty",
-      400
-    );
-  }
-
-  if (
-    data.business_type !== undefined &&
-    (!data.business_type ||
-      data.business_type.trim().length === 0)
-  ) {
-    throw new AppError(
-      "Business type cannot be empty",
       400
     );
   }
@@ -217,4 +283,44 @@ export const deleteRestaurant = async (
   }
 
   return await deactivateRestaurant(id);
+};
+
+export const reviewRestaurantRegistration = async (
+  id,
+  decision,
+  rejectionReason,
+  adminId
+) => {
+  if (
+    decision === "reject" &&
+    (
+      typeof rejectionReason !== "string" ||
+      !rejectionReason.trim()
+    )
+  ) {
+    throw new AppError(
+      "Rejection reason is required",
+      400
+    );
+  }
+
+  const result = await decideRestaurantRegistration(
+    id,
+    decision,
+    decision === "reject" ? rejectionReason.trim() : null,
+    adminId
+  );
+
+  if (!result) {
+    throw new AppError("Restaurant not found", 404);
+  }
+
+  if (result.conflict) {
+    throw new AppError(
+      `Restaurant registration has already been processed (current status: ${result.status})`,
+      409
+    );
+  }
+
+  return result;
 };

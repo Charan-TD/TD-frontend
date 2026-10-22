@@ -1,23 +1,21 @@
-export const validateEmployeeLogin = (req, res, next) => {
-  const { email, password } = req.body;
 
-  if (!email || typeof email !== "string") {
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const validateEmployeeLogin = (
+  req,
+  res,
+  next
+) => {
+  const { email, password } = req.body ?? {};
+
+  if (typeof email !== "string" || !email.trim()) {
     return res.status(400).json({
       success: false,
       message: "Valid email is required"
     });
   }
 
-  if (!password || typeof password !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "Password is required"
-    });
-  }
-
   const normalizedEmail = email.trim().toLowerCase();
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   if (!emailRegex.test(normalizedEmail)) {
     return res.status(400).json({
@@ -26,16 +24,28 @@ export const validateEmployeeLogin = (req, res, next) => {
     });
   }
 
-  req.body.email = normalizedEmail;
+  if (typeof password !== "string" || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Password is required"
+    });
+  }
 
+  req.body.email = normalizedEmail;
   next();
 };
 
+export const validateEmployeeRefresh = (
+  req,
+  res,
+  next
+) => {
+  const { refreshToken } = req.body ?? {};
 
-export const validateEmployeeRefresh = (req, res, next) => {
-  const { refreshToken } = req.body;
-
-  if (!refreshToken || typeof refreshToken !== "string") {
+  if (
+    typeof refreshToken !== "string" ||
+    !refreshToken.trim()
+  ) {
     return res.status(400).json({
       success: false,
       message: "Refresh token is required"
@@ -45,11 +55,14 @@ export const validateEmployeeRefresh = (req, res, next) => {
   next();
 };
 
+export const validateForgotEmployeePassword = (
+  req,
+  res,
+  next
+) => {
+  const { email } = req.body ?? {};
 
-export const validateForgotEmployeePassword = (req, res, next) => {
-  const { email } = req.body;
-
-  if (!email || typeof email !== "string") {
+  if (typeof email !== "string" || !email.trim()) {
     return res.status(400).json({
       success: false,
       message: "Valid email is required"
@@ -57,8 +70,6 @@ export const validateForgotEmployeePassword = (req, res, next) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   if (!emailRegex.test(normalizedEmail)) {
     return res.status(400).json({
@@ -68,38 +79,64 @@ export const validateForgotEmployeePassword = (req, res, next) => {
   }
 
   req.body.email = normalizedEmail;
-
   next();
 };
 
-
-export const validateResetEmployeePassword = (req, res, next) => {
+export const validateResetEmployeePassword = (
+  req,
+  res,
+  next
+) => {
   const {
+    email,
     token,
     newPassword
-  } = req.body;
+  } = req.body ?? {};
 
-  if (!token || typeof token !== "string") {
+  if (typeof email !== "string" || !email.trim()) {
     return res.status(400).json({
       success: false,
-      message: "Reset token is required"
+      message: "Valid email is required"
     });
   }
 
-  if (!newPassword || typeof newPassword !== "string") {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!emailRegex.test(normalizedEmail)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid email format"
+    });
+  }
+
+  if (
+    typeof token !== "string" ||
+    !/^[a-fA-F0-9]{64}$/.test(token)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Valid reset token is required"
+    });
+  }
+
+  if (typeof newPassword !== "string" || !newPassword) {
     return res.status(400).json({
       success: false,
       message: "New password is required"
     });
   }
 
-  if (newPassword.length < 8) {
+  if (
+    newPassword.length < 8 ||
+    newPassword.length > 128
+  ) {
     return res.status(400).json({
       success: false,
-      message: "Password must be at least 8 characters"
+      message: "New password must be between 8 and 128 characters"
     });
   }
 
+  req.body.email = normalizedEmail;
   next();
 };
 
@@ -111,11 +148,11 @@ export const validateChangePassword = (
   const {
     current_password,
     new_password
-  } = req.body;
+  } = req.body ?? {};
 
   if (
-    !current_password ||
-    typeof current_password !== "string"
+    typeof current_password !== "string" ||
+    !current_password
   ) {
     return res.status(400).json({
       success: false,
@@ -124,8 +161,8 @@ export const validateChangePassword = (
   }
 
   if (
-    !new_password ||
-    typeof new_password !== "string"
+    typeof new_password !== "string" ||
+    !new_password
   ) {
     return res.status(400).json({
       success: false,
@@ -133,19 +170,20 @@ export const validateChangePassword = (
     });
   }
 
-  if (new_password.length < 8) {
+  if (
+    new_password.length < 8 ||
+    new_password.length > 128
+  ) {
     return res.status(400).json({
       success: false,
-      message:
-        "New password must be at least 8 characters"
+      message: "New password must be between 8 and 128 characters"
     });
   }
 
-  if (new_password.length > 128) {
+  if (current_password === new_password) {
     return res.status(400).json({
       success: false,
-      message:
-        "New password must not exceed 128 characters"
+      message: "New password must be different from current password"
     });
   }
 

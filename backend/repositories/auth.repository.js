@@ -45,30 +45,70 @@ export const findEmployeeById = async (employeeId) => {
   return result.rows[0] || null;
 };
 
-// Get employee role and permissions
+const ACTION_ORDER = ["read", "insert", "update", "delete"];
+
+// Union of every role's permission_code, e.g.
+// { users: ["read"] } + { users: ["update"], orders: ["read"] }
+//   -> { users: ["read", "update"], orders: ["read"] }
+const mergePermissionCodes = (permissionCodes) => {
+  const merged = {};
+
+  for (const permissionCode of permissionCodes) {
+    for (const [resource, actions] of Object.entries(permissionCode || {})) {
+      if (!Array.isArray(actions)) continue;
+      merged[resource] = [...new Set([...(merged[resource] || []), ...actions])];
+    }
+  }
+
+  for (const resource of Object.keys(merged)) {
+    merged[resource].sort(
+      (a, b) =>
+        (ACTION_ORDER.indexOf(a) + 1 || 99) - (ACTION_ORDER.indexOf(b) + 1 || 99)
+    );
+  }
+
+  return merged;
+};
+
+// Get employee role and permissions.
+// An employee can hold several active roles; their access is the
+// combination of all of them. role_id is the earliest assigned role (kept
+// for tokens), role_name lists every role, and roles has each one.
 export const getEmployeeAuthorization = async (employeeId) => {
   const query = `
     SELECT
       er.employee_id,
       r.id AS role_id,
       r.role_name,
-      p.id AS permission_id,
-      p.permission_name
+      r.permission_code
     FROM employee_roles er
     INNER JOIN roles r
       ON r.id = er.role_id
-    INNER JOIN role_permissions rp
-      ON rp.role_id = r.id
-    INNER JOIN permissions p
-      ON p.id = rp.permission_id
     WHERE er.employee_id = $1
       AND er.status = 'active'
-    ORDER BY p.permission_name
+    ORDER BY er.created_at ASC, r.id ASC
   `;
 
   const result = await pool.query(query, [employeeId]);
 
-  return result.rows;
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  const [primary] = result.rows;
+
+  return {
+    employee_id: primary.employee_id,
+    role_id: primary.role_id,
+    role_name: result.rows.map((row) => row.role_name).join(", "),
+    permission_code: mergePermissionCodes(
+      result.rows.map((row) => row.permission_code)
+    ),
+    roles: result.rows.map((row) => ({
+      id: row.role_id,
+      name: row.role_name
+    }))
+  };
 };
 
 // Update employee password hash

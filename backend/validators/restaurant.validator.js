@@ -2,7 +2,10 @@ import { validate as isUuid } from "uuid";
 
 const ALLOWED_STATUSES = [
   "ACTIVE",
-  "INACTIVE"
+  "ACCEPTED",
+  "INACTIVE",
+  "PENDING",
+  "REJECTED"
 ];
 
 const validateOptionalString = (
@@ -136,15 +139,15 @@ export const validateCreateRestaurant = (
 ) => {
   const {
     name,
-    business_type,
-    legal_name,
+    restaurant_type,
     pan,
     gstin,
     fssai_number,
     fssai_valid_until,
-    bank_account_number,
-    bank_ifsc,
-    bank_account_holder,
+    account_number,
+    ifsc,
+    account_holder_name,
+    bank_proof_id,
     status
   } = req.body;
 
@@ -160,13 +163,13 @@ export const validateCreateRestaurant = (
   }
 
   if (
-    !business_type ||
-    typeof business_type !== "string" ||
-    business_type.trim().length === 0
+    !restaurant_type ||
+    typeof restaurant_type !== "string" ||
+    restaurant_type.trim().length === 0
   ) {
     return res.status(400).json({
       success: false,
-      message: "Business type is required"
+      message: "Restaurant type is required"
     });
   }
 
@@ -186,22 +189,9 @@ export const validateCreateRestaurant = (
   }
 
   error = validateOptionalString(
-    business_type,
-    "Business type",
+    restaurant_type,
+    "Restaurant type",
     100
-  );
-
-  if (error) {
-    return res.status(400).json({
-      success: false,
-      message: error
-    });
-  }
-
-  error = validateOptionalString(
-    legal_name,
-    "Legal name",
-    255
   );
 
   if (error) {
@@ -251,7 +241,7 @@ export const validateCreateRestaurant = (
   }
 
   error = validateOptionalString(
-    bank_account_number,
+    account_number,
     "Bank account number",
     100
   );
@@ -264,7 +254,7 @@ export const validateCreateRestaurant = (
   }
 
   error = validateOptionalString(
-    bank_ifsc,
+    ifsc,
     "Bank IFSC",
     11
   );
@@ -277,9 +267,21 @@ export const validateCreateRestaurant = (
   }
 
   error = validateOptionalString(
-    bank_account_holder,
+    account_holder_name,
     "Bank account holder",
     255
+  );
+
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      message: error
+    });
+  }
+
+  error = validateOptionalString(
+    bank_proof_id,
+    "Bank proof ID"
   );
 
   if (error) {
@@ -336,29 +338,25 @@ export const validateCreateRestaurant = (
   }
 
   req.body.name = name.trim();
-  req.body.business_type = business_type.trim();
-
-  if (legal_name) {
-    req.body.legal_name = legal_name.trim();
-  }
+  req.body.restaurant_type = restaurant_type.trim();
 
   if (fssai_number) {
     req.body.fssai_number = fssai_number.trim();
   }
 
-  if (bank_account_number) {
-    req.body.bank_account_number =
-      bank_account_number.trim();
+  if (account_number) {
+    req.body.account_number =
+      account_number.trim();
   }
 
-  if (bank_ifsc) {
-    req.body.bank_ifsc =
-      bank_ifsc.trim().toUpperCase();
+  if (ifsc) {
+    req.body.ifsc =
+      ifsc.trim().toUpperCase();
   }
 
-  if (bank_account_holder) {
-    req.body.bank_account_holder =
-      bank_account_holder.trim();
+  if (account_holder_name) {
+    req.body.account_holder_name =
+      account_holder_name.trim();
   }
 
   next();
@@ -372,15 +370,14 @@ export const validateUpdateRestaurant = (
 ) => {
   const allowedFields = [
     "name",
-    "business_type",
-    "legal_name",
     "pan",
     "gstin",
     "fssai_number",
     "fssai_valid_until",
-    "bank_account_number",
-    "bank_ifsc",
-    "bank_account_holder",
+    "account_number",
+    "ifsc",
+    "account_holder_name",
+    "bank_proof_id",
     "status"
   ];
 
@@ -390,6 +387,13 @@ export const validateUpdateRestaurant = (
     return res.status(400).json({
       success: false,
       message: "At least one field is required for update"
+    });
+  }
+
+  if (providedFields.includes("restaurant_type")) {
+    return res.status(400).json({
+      success: false,
+      message: "Restaurant type cannot be modified after registration"
     });
   }
 
@@ -406,15 +410,14 @@ export const validateUpdateRestaurant = (
 
   const {
     name,
-    business_type,
-    legal_name,
     pan,
     gstin,
     fssai_number,
     fssai_valid_until,
-    bank_account_number,
-    bank_ifsc,
-    bank_account_holder,
+    account_number,
+    ifsc,
+    account_holder_name,
+    bank_proof_id,
     status
   } = req.body;
 
@@ -423,32 +426,6 @@ export const validateUpdateRestaurant = (
   error = validateOptionalString(
     name,
     "Name",
-    255
-  );
-
-  if (error) {
-    return res.status(400).json({
-      success: false,
-      message: error
-    });
-  }
-
-  error = validateOptionalString(
-    business_type,
-    "Business type",
-    100
-  );
-
-  if (error) {
-    return res.status(400).json({
-      success: false,
-      message: error
-    });
-  }
-
-  error = validateOptionalString(
-    legal_name,
-    "Legal name",
     255
   );
 
@@ -499,7 +476,7 @@ export const validateUpdateRestaurant = (
   }
 
   error = validateOptionalString(
-    bank_account_number,
+    account_number,
     "Bank account number",
     100
   );
@@ -512,7 +489,7 @@ export const validateUpdateRestaurant = (
   }
 
   error = validateOptionalString(
-    bank_ifsc,
+    ifsc,
     "Bank IFSC",
     11
   );
@@ -525,9 +502,21 @@ export const validateUpdateRestaurant = (
   }
 
   error = validateOptionalString(
-    bank_account_holder,
+    account_holder_name,
     "Bank account holder",
     255
+  );
+
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      message: error
+    });
+  }
+
+  error = validateOptionalString(
+    bank_proof_id,
+    "Bank proof ID"
   );
 
   if (error) {
@@ -546,18 +535,6 @@ export const validateUpdateRestaurant = (
     }
 
     req.body.name = name.trim();
-  }
-
-  if (business_type !== undefined) {
-    if (business_type.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Business type cannot be empty"
-      });
-    }
-
-    req.body.business_type =
-      business_type.trim();
   }
 
   if (pan) {
@@ -599,24 +576,19 @@ export const validateUpdateRestaurant = (
       fssai_number.trim();
   }
 
-  if (bank_account_number) {
-    req.body.bank_account_number =
-      bank_account_number.trim();
+  if (account_number) {
+    req.body.account_number =
+      account_number.trim();
   }
 
-  if (bank_ifsc) {
-    req.body.bank_ifsc =
-      bank_ifsc.trim().toUpperCase();
+  if (ifsc) {
+    req.body.ifsc =
+      ifsc.trim().toUpperCase();
   }
 
-  if (bank_account_holder) {
-    req.body.bank_account_holder =
-      bank_account_holder.trim();
-  }
-
-  if (legal_name) {
-    req.body.legal_name =
-      legal_name.trim();
+  if (account_holder_name) {
+    req.body.account_holder_name =
+      account_holder_name.trim();
   }
 
   if (status) {
@@ -635,5 +607,26 @@ export const validateUpdateRestaurant = (
       status.toUpperCase();
   }
 
+  next();
+};
+
+export const validateRestaurantRejection = (
+  req,
+  res,
+  next
+) => {
+  const rejectionReason = req.body?.rejection_reason;
+
+  if (
+    typeof rejectionReason !== "string" ||
+    rejectionReason.trim().length === 0
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Rejection reason is required"
+    });
+  }
+
+  req.body.rejection_reason = rejectionReason.trim();
   next();
 };

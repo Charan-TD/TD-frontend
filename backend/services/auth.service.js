@@ -1,4 +1,10 @@
 import {
+  randomBytes,
+  createHash,
+  timingSafeEqual
+} from "node:crypto";
+
+import {
   findEmployeeByEmail,
   findEmployeeById,
   getEmployeeAuthorization,
@@ -19,6 +25,31 @@ import {
   verifyRefreshToken
 } from "./jwt.service.js";
 
+
+// Development-only storage.
+// Tokens are lost when the server restarts.
+const employeeResetTokens = new Map();
+
+const RESET_TOKEN_EXPIRY_MS = 15 * 60 * 1000;
+
+const hashResetToken = (token) =>
+  createHash("sha256")
+    .update(token)
+    .digest();
+
+const validateNewPassword = (password) => {
+  if (
+    typeof password !== "string" ||
+    password.length < 8 ||
+    password.length > 128
+  ) {
+    throw new AppError(
+      "New password must be between 8 and 128 characters",
+      400
+    );
+  }
+};
+
 export const loginEmployee = async (email, password) => {
 
   // 1. Find employee by email
@@ -30,7 +61,10 @@ export const loginEmployee = async (email, password) => {
 
   // 2. Check employee status
   if (employee.status !== "active") {
-    throw new AppError("Employee account is not active");
+  throw new AppError(
+    "Employee account is not active",
+    403
+  );
   }
 
   // 3. Verify password using Argon2
@@ -48,17 +82,16 @@ const authorization = await getEmployeeAuthorization(
   employee.id
 );
 
-if (authorization.length === 0) {
+if (!authorization) {
   throw new AppError(
     "No active role assigned to this employee",
     403
   );
 }
 
-// 5. Get employee role
 const role = {
-  id: authorization[0].role_id,
-  name: authorization[0].role_name
+  id: authorization.role_id,
+  name: authorization.role_name
 };
   // 6. Generate access token
   const accessToken = generateAccessToken({
@@ -89,13 +122,7 @@ const refreshToken = generateRefreshToken({
 
     role,
 
-    permissions: [
-      ...new Set(
-        authorization.map(
-          (item) => item.permission_name
-        )
-      )
-    ],
+    permissions: authorization.permission_code || {},
 
     accessToken,
 
@@ -160,13 +187,12 @@ export const refreshEmployeeAccessToken = async (
       employee.id
     );
 
-  const role =
-    authorization.length > 0
-      ? {
-          id: authorization[0].role_id,
-          name: authorization[0].role_name
-        }
-      : null;
+  const role = authorization
+  ? {
+      id: authorization.role_id,
+      name: authorization.role_name
+    }
+  : null;
 
   const accessToken =
     generateAccessToken({
@@ -187,8 +213,10 @@ export const refreshEmployeeAccessToken = async (
     });
 
   return {
-    accessToken,
-    refreshToken: newRefreshToken
+  accessToken,
+  refreshToken: newRefreshToken,
+  permissions: authorization?.permission_code || {},
+  role
   };
 };
 
@@ -265,5 +293,107 @@ export const changeEmployeePassword = async (
 
   return {
     message: "Password changed successfully"
+  };
+};
+
+export const requestEmployeePasswordReset = async (email) => {
+  if (typeof email !== "string" || !email.trim()) {
+    throw new AppError("Valid email is required", 400);
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const employee = await findEmployeeByEmail(normalizedEmail);
+
+  const genericMessage =
+    "If an account exists with this email, password reset instructions have been generated.";
+
+  if (!employee || employee.status !== "active") {
+    return {
+      message: genericMessage
+    };
+  }
+
+  const resetToken = randomBytes(32).toString("hex");
+
+  employeeResetTokens.set(String(employee.id), {
+    tokenHash: hashResetToken(resetToken),
+    expiresAt: Date.now() + RESET_TOKEN_EXPIRY_MS
+  });
+
+  return {
+    message: genericMessage,
+    ...(process.env.NODE_ENV !== "production" && {
+      data: {
+        resetToken,
+        expiresIn: 900
+      }
+    })
+  };
+};
+
+export const resetEmployeePassword = async ({
+  email,
+  token,
+  newPassword
+}) => {
+  if (typeof email !== "string" || !email.trim()) {
+    throw new AppError("Email is required", 400);
+  }
+
+  if (typeof token !== "string" || !token.trim()) {
+    throw new AppError("Reset token is required", 400);
+  }
+
+  validateNewPassword(newPassword);
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const employee = await findEmployeeByEmail(normalizedEmail);
+
+  if (!employee || employee.status !== "active") {
+    throw new AppError("Invalid or expired reset token", 400);
+  }
+
+  const stored = employeeResetTokens.get(String(employee.id));
+
+  if (!stored || Date.now() >= stored.expiresAt) {
+    employeeResetTokens.delete(String(employee.id));
+    throw new AppError("Invalid or expired reset token", 400);
+  }
+
+  const suppliedHash = hashResetToken(token);
+
+  if (
+    suppliedHash.length !== stored.tokenHash.length ||
+    !timingSafeEqual(suppliedHash, stored.tokenHash)
+  ) {
+    throw new AppError("Invalid or expired reset token", 400);
+  }
+
+  const isSamePassword = await verifyPassword(
+    newPassword,
+    employee.password_hash
+  );
+
+  if (isSamePassword) {
+    throw new AppError(
+      "New password must be different from current password",
+      400
+    );
+  }
+
+  const newPasswordHash = await hashPassword(newPassword);
+
+  await updateEmployeePassword(
+    employee.id,
+    newPasswordHash
+  );
+
+  // Token cannot be reused after successful reset.
+  employeeResetTokens.delete(String(employee.id));
+
+  return {
+    message: "Employee password reset successfully"
   };
 };

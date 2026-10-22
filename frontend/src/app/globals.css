@@ -7009,3 +7009,166 @@ a.review-doc:hover {
   color: #7b817d;
   font-size: 12px;
 }
+
+/* Validation message under a form field */
+.form-grid label small.field-error {
+  color: #c62828;
+}
+
+/* Station location picker: search box, draggable pin map and address. */
+.station-picker-slot {
+  grid-column: 1 / -1;
+}
+
+.station-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.station-picker__field {
+  display: grid;
+  gap: 7px;
+  color: #59625d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.station-picker__search {
+  position: relative;
+}
+
+.station-picker__search input,
+.station-picker__field textarea {
+  width: 100%;
+  padding: 0 11px;
+  border: 1px solid #e2e5ed;
+  border-radius: 9px;
+  color: var(--ink);
+  outline: 0;
+  background: #fff;
+  font: inherit;
+}
+
+.station-picker__search input {
+  height: 42px;
+}
+
+.station-picker__field textarea {
+  padding: 10px 11px;
+  resize: vertical;
+}
+
+.station-picker__search input:focus,
+.station-picker__field textarea:focus {
+  border-color: #1f6b4f;
+  box-shadow: 0 0 0 3px rgba(31, 107, 79, .08);
+}
+
+.station-picker__results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid #e2e5ed;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(20, 30, 25, .14);
+}
+
+.station-picker__results button {
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 7px;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.station-picker__results button:hover,
+.station-picker__results button:focus-visible {
+  background: #f3f6f4;
+}
+
+.station-picker__hint {
+  padding: 9px 10px;
+  color: #7c837e;
+  font-size: 12px;
+}
+
+.station-picker__map {
+  height: 280px;
+  cursor: crosshair;
+}
+
+.station-picker__tip {
+  color: #7c837e;
+  font-size: 11px;
+}
+
+.station-pin {
+  background: transparent;
+}
+
+.station-pin span {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: var(--orange-deep, #e8590c);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+  transform: rotate(-45deg);
+  cursor: grab;
+}
+
+/* Admin category list inside the Add category panel. */
+.category-list {
+  margin-top: 24px;
+  border-top: 1px solid #e2e5ed;
+  padding-top: 16px;
+}
+
+.category-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.category-list__head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.category-list ul {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e2e5ed;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.category-list li span {
+  color: #7c837e;
+  font-size: 11px;
+}

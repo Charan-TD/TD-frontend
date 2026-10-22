@@ -5,10 +5,12 @@ import {
   findCustomerUserByEmail,
   createCustomerUser,
   updateCustomerUser,
-  deactivateCustomerUser
+  deactivateCustomerUser,
+  getCustomerProfileById,
+  updateCustomerProfileById
 } from "../repositories/customer-user.repository.js";
-
 import { AppError } from "../utils/app-error.js";
+import { uploadCustomerProfileImageToStorage } from "./customerProfileImage.service.js";
 
 // List customers
 export const listCustomerUsers = async ({
@@ -188,4 +190,93 @@ export const deleteCustomer = async (id) => {
   }
 
   return await deactivateCustomerUser(id);
+};
+
+// Get authenticated customer's own profile
+export const getMyCustomerProfile = async (customerId) => {
+  const customer = await getCustomerProfileById(customerId);
+
+  if (!customer) {
+    throw new AppError(
+      "Customer user not found",
+      404
+    );
+  }
+
+  return customer;
+};
+
+// Update authenticated customer's own profile
+export const updateMyCustomerProfile = async (
+  customerId,
+  data,
+  profileImageFile = null
+) => {
+  const existingCustomer =
+    await getCustomerProfileById(customerId);
+
+  if (!existingCustomer) {
+    throw new AppError(
+      "Customer user not found",
+      404
+    );
+  }
+
+  if (
+    data.full_name !== undefined &&
+    data.full_name !== null
+  ) {
+    if (
+      typeof data.full_name !== "string" ||
+      data.full_name.trim().length === 0
+    ) {
+      throw new AppError(
+        "Full name cannot be empty",
+        400
+      );
+    }
+  }
+
+  if (
+    data.email !== undefined &&
+    data.email !== null &&
+    data.email !== existingCustomer.email
+  ) {
+    const existingEmail =
+      await findCustomerUserByEmail(data.email);
+
+    if (
+      existingEmail &&
+      existingEmail.id !== customerId
+    ) {
+      throw new AppError(
+        "Customer with this email already exists",
+        409
+      );
+    }
+  }
+
+  const updateData = {
+    ...data
+  };
+
+  // Do not accept image URLs directly from request body.
+  delete updateData.profile_img;
+  delete updateData.profile_image_url;
+
+  if (profileImageFile) {
+    const uploadedImage =
+      await uploadCustomerProfileImageToStorage(
+        customerId,
+        profileImageFile
+      );
+
+    // Existing database column.
+    updateData.profile_image_url = uploadedImage.filePath;
+  }
+
+  return await updateCustomerProfileById(
+    customerId,
+    updateData
+  );
 };

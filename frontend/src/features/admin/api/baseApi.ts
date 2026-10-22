@@ -68,6 +68,7 @@ export const baseApi = createApi({
     "AdminUser",
     "AdminAccess",
     "Restaurant",
+    "AdminCategory",
     "MenuItem",
     "RegistrationRequest",
     "ProfileEditRequest",
