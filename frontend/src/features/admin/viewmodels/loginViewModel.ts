@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useEmployeeLoginMutation } from "../api/authApi";
-import { baseApi } from "../api/baseApi";
+import { baseApi, LAST_401_KEY } from "../api/baseApi";
 import type { EmployeeLoginData } from "../api/authApi";
 import { setAuthSession } from "../authSlice";
 import { store } from "../store";
@@ -38,7 +38,11 @@ export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void
   useEffect(() => {
     if (!sessionStorage.getItem(SESSION_EXPIRED_NOTE_KEY)) return;
     sessionStorage.removeItem(SESSION_EXPIRED_NOTE_KEY);
-    setErrorMessage("Your session has expired. Please sign in again.");
+    const detail = sessionStorage.getItem(LAST_401_KEY);
+    sessionStorage.removeItem(LAST_401_KEY);
+    setErrorMessage(
+      detail ? `Your session has expired. Please sign in again. (${detail})` : "Your session has expired. Please sign in again.",
+    );
   }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
 

@@ -15,6 +15,9 @@ const ACCESS_TOKEN_KEY = "train_dabba_access_token";
 /** Fired when the API rejects the login (e.g. it expired); the portal signs out. */
 export const SESSION_EXPIRED_EVENT = "train-dabba:session-expired";
 
+/** sessionStorage key holding which request caused the last sign-out, so the sign-in screen can show it. */
+export const LAST_401_KEY = "train_dabba_last_401";
+
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: API_BASE_URL,
 
@@ -52,6 +55,16 @@ const baseQueryWithSessionCheck: BaseQueryFn<string | FetchArgs, unknown, FetchB
   const result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error?.status === 401 && !isLoginRequest(args) && typeof window !== "undefined") {
+    // Record which request was rejected and why, so a surprise sign-out can be traced.
+    const request = typeof args === "string" ? { method: "GET", url: args } : { method: args.method ?? "GET", url: args.url };
+    const reason = (result.error.data as { message?: string } | undefined)?.message ?? "no message";
+    const detail = `${request.method} ${request.url} returned 401: ${reason}`;
+    console.warn("[auth] Signed out after a rejected request —", detail);
+    try {
+      sessionStorage.setItem(LAST_401_KEY, detail);
+    } catch {
+      // Storage can be unavailable (private mode); the console line above still has it.
+    }
     window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
   }
 
