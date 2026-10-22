@@ -7333,8 +7333,79 @@ a.review-doc:hover {
   font-size: 12px;
 }
 
-.station-perf-grid {
+.station-perf-summary {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  gap: 24px;
   margin-top: 18px;
+  padding: 22px 24px;
+  border: 1px solid #e9ece8;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fffaf3 0%, #fff 55%);
+}
+
+.station-perf-summary__lead {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding-right: 24px;
+  border-right: 1px solid #ece8e1;
+}
+
+.station-perf-summary__lead p {
+  margin: 8px 0 0;
+  color: #59625d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.station-perf-summary__lead strong {
+  color: var(--ink);
+  font-size: 40px;
+  line-height: 1;
+}
+
+.station-perf-summary small {
+  color: #7c837e;
+  font-size: 11px;
+}
+
+.station-perf-summary__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 20px 24px;
+  margin: 0;
+  align-self: center;
+}
+
+.station-perf-summary__stats > div {
+  display: grid;
+  gap: 4px;
+}
+
+.station-perf-summary__stats dt {
+  color: #59625d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.station-perf-summary__stats dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .station-perf-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .station-perf-summary__lead {
+    padding: 0 0 18px;
+    border-right: 0;
+    border-bottom: 1px solid #ece8e1;
+  }
 }
 
 .station-perf-panels {

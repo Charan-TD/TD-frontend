@@ -620,15 +620,14 @@ function StationPerformance({ query }: { query: StationsQuery }) {
   const loadingOrders = ordersQuery.isLoading;
   const show = (value: string) => (loadingOrders || ordersQuery.isError ? "—" : value);
 
-  const cards = figures
-    ? ([
-        { id: "orders", label: "Total orders", description: "All orders for this station", icon: "bag", tone: "saffron", value: show(String(figures.total)) },
-        { id: "delivered", label: "Delivered", description: "Completed orders", icon: "check", tone: "mint", value: show(String(figures.delivered)) },
-        { id: "progress", label: "In progress", description: "Placed up to out for delivery", icon: "chart", tone: "indigo", value: show(String(figures.inProgress)) },
-        { id: "cancelled", label: "Cancelled", description: `${figures.cancelRate}% of orders`, icon: "bag", tone: "slate", value: show(String(figures.cancelled)) },
-        { id: "revenue", label: "Revenue", description: "From delivered orders", icon: "wallet", tone: "orange", value: show(rupees(figures.revenue)) },
-        { id: "average", label: "Average order value", description: "Per delivered order", icon: "wallet", tone: "violet", value: show(figures.delivered ? rupees(figures.average) : "—") },
-      ] as const)
+  const stats = figures
+    ? [
+        { id: "delivered", label: "Delivered", note: "Completed orders", value: show(String(figures.delivered)) },
+        { id: "progress", label: "In progress", note: "Placed up to out for delivery", value: show(String(figures.inProgress)) },
+        { id: "cancelled", label: "Cancelled", note: `${figures.cancelRate}% of orders`, value: show(String(figures.cancelled)) },
+        { id: "revenue", label: "Revenue", note: "From delivered orders", value: show(rupees(figures.revenue)) },
+        { id: "average", label: "Avg. order value", note: "Per delivered order", value: show(figures.delivered ? rupees(figures.average) : "—") },
+      ]
     : [];
 
   return (
@@ -700,20 +699,28 @@ function StationPerformance({ query }: { query: StationsQuery }) {
 
       {station && (
         <>
-          <div className="user-activity-grid station-perf-grid">
-            {cards.map((card) => (
-              <article className={`user-activity-card user-activity-card--${card.tone}`} key={card.id}>
-                <div className="user-activity-card__top">
-                  <span className={`user-activity-icon tone-${card.tone}`}>
-                    <Icon name={card.icon} size={19} />
-                  </span>
-                </div>
-                <p>{card.label}</p>
-                <strong>{card.value}</strong>
-                <small>{card.description}</small>
-              </article>
-            ))}
-          </div>
+          {figures && (
+            <article className="station-perf-summary">
+              <div className="station-perf-summary__lead">
+                <span className="user-activity-icon tone-saffron">
+                  <Icon name="bag" size={19} />
+                </span>
+                <p>Total orders</p>
+                <strong>{show(String(figures.total))}</strong>
+                <small>All orders for this station</small>
+              </div>
+
+              <dl className="station-perf-summary__stats">
+                {stats.map((stat) => (
+                  <div key={stat.id}>
+                    <dt>{stat.label}</dt>
+                    <dd>{stat.value}</dd>
+                    <small>{stat.note}</small>
+                  </div>
+                ))}
+              </dl>
+            </article>
+          )}
 
           {figures && !loadingOrders && !ordersQuery.isError && (
             <div className="station-perf-panels">
