@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { RefreshButton } from "../../admin/components/RefreshButton";
 import { SidePanel } from "../../admin/components/SidePanel";
@@ -8,6 +8,16 @@ import { disabledReason } from "../../admin/models/disabledReason";
 import { useCreateAdminCategoryMutation, useGetAdminCategoriesQuery } from "../api/categoriesApi";
 
 const NAME_MAX = 150;
+const IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+/** Same rules as the server: JPG, PNG or WEBP, up to 2 MB. */
+const imageProblem = (file: File | null): string | undefined => {
+  if (!file) return "Category image is required";
+  if (!IMAGE_TYPES.includes(file.type)) return "Image must be a JPG, PNG or WEBP file";
+  if (file.size > IMAGE_MAX_BYTES) return "Image must be smaller than 2 MB";
+  return undefined;
+};
 
 type Props = {
   open: boolean;
@@ -22,17 +32,41 @@ export function AddCategoryPanel({ open, onClose }: Props) {
   const [createCategory, { isLoading: saving }] = useCreateAdminCategoryMutation();
 
   const [name, setName] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [showError, setShowError] = useState(false);
   const [formError, setFormError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
 
   const trimmed = name.trim();
   const nameError = !trimmed ? "Category name is required" : undefined;
+  const imageError = imageProblem(image);
   const saveBlocked = disabledReason([saving, "Saving the category…"]);
+
+  // Preview of the chosen image; the object URL is released when it changes.
+  useEffect(() => {
+    if (!image) {
+      setPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(image);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [image]);
+
+  const resetForm = () => {
+    setName("");
+    setImage(null);
+    setFileInputKey((key) => key + 1);
+    setShowError(false);
+  };
 
   const close = () => {
     if (saving) return;
     setName("");
+    setImage(null);
+    setFileInputKey((key) => key + 1);
     setShowError(false);
     setFormError("");
     setSavedMessage("");
@@ -43,13 +77,16 @@ export function AddCategoryPanel({ open, onClose }: Props) {
     setShowError(true);
     setFormError("");
     setSavedMessage("");
-    if (nameError) return;
+    if (nameError || imageError || !image) return;
+
+    const body = new FormData();
+    body.append("category_name", trimmed);
+    body.append("cat_img_id", image);
 
     try {
-      await createCategory({ category_name: trimmed }).unwrap();
+      await createCategory(body).unwrap();
       setSavedMessage(`${trimmed} was added.`);
-      setName("");
-      setShowError(false);
+      resetForm();
     } catch (error) {
       const message = (error as { data?: { message?: string } } | undefined)?.data?.message;
       setFormError(message || "The category could not be saved. Try again.");
@@ -83,6 +120,23 @@ export function AddCategoryPanel({ open, onClose }: Props) {
           ) : (
             <small>Each category name must be unique.</small>
           )}
+        </label>
+
+        <label className="station-picker-slot">
+          <span>Category image *</span>
+          <input
+            key={fileInputKey}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => setImage(event.target.files?.[0] ?? null)}
+            disabled={saving}
+          />
+          {showError && imageError ? (
+            <small className="field-error" role="alert">{imageError}</small>
+          ) : (
+            <small>JPG, PNG or WEBP, up to 2 MB.</small>
+          )}
+          {preview && !imageProblem(image) && <img className="category-preview" src={preview} alt="Selected category" />}
         </label>
       </div>
 
@@ -120,6 +174,7 @@ export function AddCategoryPanel({ open, onClose }: Props) {
           <ul>
             {categories.map((category) => (
               <li key={category.category_id}>
+                {category.cat_img_url && <img className="category-thumb" src={category.cat_img_url} alt="" />}
                 <strong>{category.category_name}</strong>
                 <span>
                   {category.category_id}

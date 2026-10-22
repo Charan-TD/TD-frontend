@@ -7172,3 +7172,29 @@ a.review-doc:hover {
   color: #7c837e;
   font-size: 11px;
 }
+
+/* Category image: chosen-file preview and list thumbnail. */
+.category-preview {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: 1px solid #e2e5ed;
+  border-radius: 9px;
+}
+
+.category-thumb {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 7px;
+}
+
+.category-list li strong {
+  margin-right: auto;
+}
+
+.form-grid input[type="file"] {
+  height: auto;
+  padding: 8px 11px;
+}
