@@ -88,8 +88,8 @@ const toForm = (station: Station): FormValues => ({
 
 export type StationView = "all" | "active" | "inactive";
 
-/** Older servers have no is_active field, so a station counts as active unless it is false. */
-const isStationActive = (station: Station) => station.is_active !== false;
+/** `status` is true for active stations. Older servers omit it, so a station counts as active unless it is false. */
+const isStationActive = (station: Station) => station.status !== false;
 
 const requiredText = (value: string, label: string, max: number) => {
   const text = value.trim();
@@ -206,7 +206,7 @@ function StationList({
     // The API can set coordinates but not clear them, so an emptied box is ignored.
     if (values.latitude.trim() && Number(values.latitude) !== Number(original.latitude)) diff.latitude = Number(values.latitude);
     if (values.longitude.trim() && Number(values.longitude) !== Number(original.longitude)) diff.longitude = Number(values.longitude);
-    if (values.status !== original.status) diff.is_active = values.status === "active";
+    if (values.status !== original.status) diff.status = values.status === "active";
     return diff;
   }, [editing, values]);
 
@@ -261,8 +261,6 @@ function StationList({
       state: values.state.trim(),
       ...(values.latitude.trim() ? { latitude: Number(values.latitude) } : {}),
       ...(values.longitude.trim() ? { longitude: Number(values.longitude) } : {}),
-      // New stations are active by default, so only an inactive choice needs sending.
-      ...(values.status === "inactive" ? { is_active: false } : {}),
     };
 
     try {
@@ -270,7 +268,11 @@ function StationList({
         await updateStation({ id: editing.id, changes }).unwrap();
         setSavedMessage(`${payload.name} was updated.`);
       } else {
-        await createStation(payload).unwrap();
+        const created = await createStation(payload).unwrap();
+        // The create call has no status field: stations start active, so an inactive one is switched off after.
+        if (values.status === "inactive") {
+          await updateStation({ id: created.id, changes: { status: false } }).unwrap();
+        }
         setSavedMessage(`${payload.name} was added.`);
       }
       setPanelOpen(false);
@@ -297,7 +299,7 @@ function StationList({
     setSavedMessage("");
     setTogglingId(station.id);
     try {
-      await updateStation({ id: station.id, changes: { is_active: activate } }).unwrap();
+      await updateStation({ id: station.id, changes: { status: activate } }).unwrap();
       setSavedMessage(`${station.name} is now ${activate ? "active" : "inactive"}.`);
     } catch (error) {
       setActionError(errorText(error, "The station status could not be changed."));

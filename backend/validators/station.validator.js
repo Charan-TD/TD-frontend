@@ -152,12 +152,12 @@ export const validateCreateStation = (
     state,
     latitude,
     longitude,
-    is_active
+    status
   } = req.body;
 
   let error;
 
-  error = validateOptionalBoolean(is_active, "is_active");
+  error = validateOptionalBoolean(status, "status");
 
   if (error) {
     return res.status(400).json({
@@ -275,7 +275,7 @@ export const validateUpdateStation = (
     "state",
     "latitude",
     "longitude",
-    "is_active"
+    "status"
   ];
 
   const providedFields = Object.keys(req.body);
@@ -305,12 +305,12 @@ export const validateUpdateStation = (
     state,
     latitude,
     longitude,
-    is_active
+    status
   } = req.body;
 
   let error;
 
-  error = validateOptionalBoolean(is_active, "is_active");
+  error = validateOptionalBoolean(status, "status");
 
   if (error) {
     return res.status(400).json({

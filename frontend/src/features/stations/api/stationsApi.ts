@@ -10,7 +10,7 @@ export type Station = {
   latitude?: number | string | null;
   longitude?: number | string | null;
   /** Missing on older servers; a station is treated as active unless this is false. */
-  is_active?: boolean | null;
+  status?: boolean | null;
   created_at?: string | null;
 };
 
@@ -22,7 +22,7 @@ export type StationInput = {
   state: string;
   latitude?: number;
   longitude?: number;
-  is_active?: boolean;
+  status?: boolean;
 };
 
 type StationList = {
@@ -58,7 +58,7 @@ export const stationsApi = baseApi.injectEndpoints({
     }),
 
     updateStation: builder.mutation<Station, { id: string; changes: Partial<StationInput> }>({
-      query: ({ id, changes }) => ({ url: `/stations/${id}`, method: "PUT", body: changes }),
+      query: ({ id, changes }) => ({ url: `/stations/${id}`, method: "PATCH", body: changes }),
       transformResponse: (response: StationResponse) => response.data,
       invalidatesTags: (_result, _error, { id }) => [
         { type: "Station", id },

@@ -65,7 +65,7 @@ const router = express.Router();
  *                     state: "Telangana"
  *                     latitude: 17.4344
  *                     longitude: 78.5013
- *                     is_active: true
+ *                     status: true
  *                     created_at: "2026-10-22T10:30:00.000Z"
  *                 pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
  *       401:
@@ -148,7 +148,7 @@ router.get(
  *                 type: number
  *               longitude:
  *                 type: number
- *               is_active:
+ *               status:
  *                 type: boolean
  *                 description: false hides the station from customers (defaults to true)
  *             example:
@@ -212,7 +212,7 @@ router.post(
  *                 type: number
  *               longitude:
  *                 type: number
- *               is_active:
+ *               status:
  *                 type: boolean
  *                 description: false hides the station from customers (defaults to true)
  *     responses:
@@ -229,14 +229,17 @@ router.post(
  *       409:
  *         description: Station code already exists
  */
-router.put(
-  "/:id",
+// PATCH is what the admin portal sends; PUT is kept for existing clients.
+const updateStationHandlers = [
   authenticate,
   authorize("stations", "update"),
   validateStationId,
   validateUpdateStation,
   updateStation
-);
+];
+
+router.put("/:id", ...updateStationHandlers);
+router.patch("/:id", ...updateStationHandlers);
 
 /**
  * @swagger
