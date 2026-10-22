@@ -10,6 +10,9 @@ export type Order = {
   /** Present on some server versions: the station the food is delivered at. */
   delivery_station_id?: string | null;
   order_number?: string | null;
+  /** The restaurant's readable ID (not its UUID). */
+  restaurant_id?: string | null;
+  restaurant_name?: string | null;
   journey_date?: string | null;
   /** Order total in rupees. */
   total?: number | string | null;

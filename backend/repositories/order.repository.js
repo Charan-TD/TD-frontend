@@ -52,8 +52,14 @@ export const getOrders = async ({
       o.discount,
       o.restaurant_station_service_id,
       o.idempotency_key,
-      o.delivery_train_stop_id
+      o.delivery_train_stop_id,
+      rss.restaurant_id,
+      r.name AS restaurant_name
     FROM orders o
+    LEFT JOIN public.restaurant_station_services rss
+      ON rss.id = o.restaurant_station_service_id
+    LEFT JOIN public.restaurants r
+      ON r.restaurant_id = rss.restaurant_id
     ${whereClause}
     ORDER BY o.created_at DESC
     LIMIT $${limitParam}

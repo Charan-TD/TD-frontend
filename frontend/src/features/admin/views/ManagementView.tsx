@@ -684,11 +684,13 @@ function OrderWorkspace({
       rows={visibleOrders.map((order) => [
         order.order_number ?? "—",
         order.customer_user_id ?? "—",
+        order.restaurant_id ?? "—",
         order.status ?? "—",
       ])}
       columns={[
         "Order Number",
         "Customer User ID",
+        "Restaurant ID",
         "Status",
       ]}
       loading={isLoading}
