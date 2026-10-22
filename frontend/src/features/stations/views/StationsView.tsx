@@ -551,27 +551,34 @@ function StationPerformance({ query }: { query: StationsQuery }) {
 
   const coverage = useMemo(() => {
     const cities = new Set<string>();
-    const states = new Map<string, { stations: number; cities: Set<string> }>();
-    let withCoordinates = 0;
+    const states = new Map<string, { stations: number; active: number; cities: Set<string> }>();
+    let active = 0;
 
     stations.forEach((station) => {
       const city = station.city?.trim();
       const state = station.state?.trim() || "Not set";
       if (city) cities.add(city.toLowerCase());
-      const entry = states.get(state) ?? { stations: 0, cities: new Set<string>() };
+      const entry = states.get(state) ?? { stations: 0, active: 0, cities: new Set<string>() };
       entry.stations += 1;
+      if (isStationActive(station)) {
+        entry.active += 1;
+        active += 1;
+      }
       if (city) entry.cities.add(city.toLowerCase());
       states.set(state, entry);
-      if (Number.isFinite(Number(station.latitude)) && Number.isFinite(Number(station.longitude)) && station.latitude != null && station.longitude != null) {
-        withCoordinates += 1;
-      }
     });
 
     return {
       cities: cities.size,
-      withCoordinates,
+      active,
       states: Array.from(states.entries())
-        .map(([state, entry]) => ({ state, stations: entry.stations, cities: entry.cities.size }))
+        .map(([state, entry]) => ({
+          state,
+          stations: entry.stations,
+          active: entry.active,
+          inactive: entry.stations - entry.active,
+          cities: entry.cities.size,
+        }))
         .sort((a, b) => b.stations - a.stations),
     };
   }, [stations]);
@@ -580,16 +587,10 @@ function StationPerformance({ query }: { query: StationsQuery }) {
 
   const coverageCards = [
     { id: "total", label: "Total stations", description: "Stations configured in the system", icon: "station", tone: "saffron", value: number(stations.length) },
+    { id: "active", label: "Active stations", description: "Available to customers", icon: "check", tone: "mint", value: number(coverage.active) },
+    { id: "inactive", label: "Inactive stations", description: "Hidden from customers", icon: "station", tone: "slate", value: number(stations.length - coverage.active) },
     { id: "cities", label: "Cities covered", description: "Distinct cities with a station", icon: "store", tone: "orange", value: number(coverage.cities) },
     { id: "states", label: "States covered", description: "Distinct states with a station", icon: "chart", tone: "indigo", value: number(coverage.states.length) },
-    { id: "coords", label: "With map location", description: "Stations that have latitude and longitude", icon: "check", tone: "mint", value: number(coverage.withCoordinates) },
-  ] as const;
-
-  // Order-based figures have no API yet, so they show "—" rather than invented numbers.
-  const orderCards = [
-    { id: "orders", label: "Orders per station", description: "Orders placed at each station", icon: "bag", tone: "violet" },
-    { id: "delivery", label: "Average delivery time", description: "Time from order to hand-over", icon: "chart", tone: "slate" },
-    { id: "restaurants", label: "Restaurants per station", description: "Restaurants serving each station", icon: "store", tone: "orange" },
   ] as const;
 
   return (
@@ -598,7 +599,7 @@ function StationPerformance({ query }: { query: StationsQuery }) {
         <div>
           <span className="eyebrow">STATION PERFORMANCE</span>
           <h2>Station performance</h2>
-          <p>Where the network reaches today. Order figures will fill in once the orders data is connected.</p>
+          <p>Where the station network reaches today, and how many stations are live.</p>
         </div>
 
         <RefreshButton refreshing={isFetching} label="the stations" onRefresh={() => refetch()} />
@@ -624,21 +625,9 @@ function StationPerformance({ query }: { query: StationsQuery }) {
           </article>
         ))}
 
-        {orderCards.map((card) => (
-          <article className={`user-activity-card user-activity-card--${card.tone}`} key={card.id}>
-            <div className="user-activity-card__top">
-              <span className={`user-activity-icon tone-${card.tone}`}>
-                <Icon name={card.icon} size={19} />
-              </span>
-            </div>
-            <p>{card.label}</p>
-            <strong>—</strong>
-            <small>{card.description}</small>
-          </article>
-        ))}
       </div>
 
-      {isLoading && !isError && <SkeletonTable columns={["State", "Stations", "Cities"]} rows={4} />}
+      {isLoading && !isError && <SkeletonTable columns={["State", "Stations", "Active", "Inactive", "Cities"]} rows={4} />}
 
       {!isLoading && !isError && (
         <div className="user-table-wrap">
@@ -647,6 +636,8 @@ function StationPerformance({ query }: { query: StationsQuery }) {
               <tr>
                 <th>State</th>
                 <th>Stations</th>
+                <th>Active</th>
+                <th>Inactive</th>
                 <th>Cities</th>
               </tr>
             </thead>
@@ -655,6 +646,8 @@ function StationPerformance({ query }: { query: StationsQuery }) {
                 <tr key={row.state}>
                   <td>{row.state}</td>
                   <td>{row.stations}</td>
+                  <td>{row.active}</td>
+                  <td>{row.inactive}</td>
                   <td>{row.cities}</td>
                 </tr>
               ))}
