@@ -1,15 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { OrderStatus } from "../../orders/components/OrderStatus";
 
 import type { CustomerUser } from "../models/customerUser";
 
 import { Icon } from "../components/Icon";
-import { RefreshButton } from "../components/RefreshButton";
+import { ManagementActionButton } from "../components/ManagementActionButton";
+import { ManagementStatus } from "../components/ManagementStatus";
+import { TransientSuccessMessage } from "../components/TransientSuccessMessage";
+import { ListToolbar } from "../components/ListToolbar";
+import { StatusTabs } from "../components/StatusTabs";
+import { ListPagination } from "../components/ListPagination";
+import { PrimaryActionButton } from "../components/PrimaryActionButton";
+import { SectionActions } from "../components/SectionActions";
+import { PaymentsView } from "./PaymentsView";
 import { ComingSoonPanel } from "../components/ComingSoonPanel";
 import { UserAvatar } from "../components/UserAvatar";
 import { SkeletonTable } from "../components/Skeleton";
 import { noAccess } from "../models/disabledReason";
+import { formatStatusLabel } from "../models/formatStatusLabel";
 
 import {
   isUserBlocked,
@@ -17,29 +27,40 @@ import {
   type UserWorkspace,
 } from "../viewmodels/usersViewModel";
 
-import { useGetRidersQuery } from "../../riders/api/ridersApi";
-import { useGetRestaurantsQuery, type Restaurant } from "../../restaurants/api/restaurantsApi";
+
+import { useGetAllRestaurantsQuery, useSetRestaurantBlockedMutation, type Restaurant } from "../../restaurants/api/restaurantsApi";
 import { RestaurantApprovalsView } from "./RestaurantApprovalsView";
 import { RestaurantDetailsView } from "./RestaurantDetailsView";
-import { useGetOrdersQuery } from "../../orders/api/ordersApi";
+import { ReviewModal } from "../components/ReviewModal";
+import { useGetAllOrdersQuery, type Order } from "../../orders/api/ordersApi";
+import { GroupOrdersView } from "../../orders/views/GroupOrdersView";
+import { DeliveryPartnersView } from "../../riders/views/DeliveryPartnersView";
 import { StationsView } from "../../stations/views/StationsView";
 import { AddCategoryPanel } from "../../restaurants/views/AddCategoryPanel";
 
 type Props = {
   selectedSubsection: string;
+  onSelectSubsection: (subsection: string) => void;
   /** Whether the signed-in person may block / unblock users. */
   canUpdateUsers: boolean;
   /** What the signed-in person may do with stations. */
   stationAccess: { insert: boolean; update: boolean };
   /** Whether the signed-in person may add restaurant categories. */
   canAddRestaurantCategory: boolean;
+  canBlockRestaurants: boolean;
+  canUnblockRestaurants: boolean;
+  canAssignGroupOrders: boolean;
 };
 
 export function ManagementView({
   selectedSubsection,
+  onSelectSubsection,
   canUpdateUsers,
   stationAccess,
   canAddRestaurantCategory,
+  canBlockRestaurants,
+  canUnblockRestaurants,
+  canAssignGroupOrders,
 }: Props) {
   const section =
     selectedSubsection.split("-")[0] || "users";
@@ -55,7 +76,7 @@ export function ManagementView({
 
   if (section === "riders") {
     return (
-      <RiderWorkspace
+      <DeliveryPartnersView
         subsection={selectedSubsection}
       />
     );
@@ -66,9 +87,13 @@ export function ManagementView({
       <RestaurantWorkspace
         subsection={selectedSubsection}
         canAddCategory={canAddRestaurantCategory}
+        canBlockRestaurants={canBlockRestaurants}
+        canUnblockRestaurants={canUnblockRestaurants}
       />
     );
   }
+
+  if (section === "grouporders") return <GroupOrdersView canAssign={canAssignGroupOrders} />;
 
   if (section === "orders") {
     return (
@@ -80,9 +105,7 @@ export function ManagementView({
 
   if (section === "sales") {
     return (
-      <SalesWorkspace
-        subsection={selectedSubsection}
-      />
+      <PaymentsView key={selectedSubsection} subsection={selectedSubsection} onSelectSubsection={onSelectSubsection} />
     );
   }
 
@@ -122,7 +145,7 @@ export function ManagementView({
   );
 }
 
-// User activity has no API yet, so these cards show "—" instead of a number.
+// User activity has no API yet, so these cards show "-" instead of a number.
 const userActivityCards = [
   { id: "active", label: "Currently active users", description: "Users active on the platform right now", icon: "users", tone: "saffron" },
   { id: "searching", label: "Searching for food", description: "Users browsing kitchens and food items", icon: "search", tone: "orange" },
@@ -159,13 +182,7 @@ function UsersWorkspace({
     return (
       <section className="user-activity-workspace">
         <header className="user-activity-header">
-          <div>
-            <h2>User activities</h2>
-            <p>
-              See where users and orders are in the
-              journey right now.
-            </p>
-          </div>
+          <div><h2>User activities</h2><p>See where users and orders are in the journey right now.</p></div>
         </header>
 
         <div className="user-activity-grid">
@@ -186,7 +203,7 @@ function UsersWorkspace({
               </div>
 
               <p>{activity.label}</p>
-              <strong>—</strong>
+              <strong>-</strong>
               <small>{activity.description}</small>
             </article>
           ))}
@@ -213,54 +230,22 @@ function UsersTable({
   const blockUserHint = (user: CustomerUser) =>
     noAccess(isUserBlocked(user) ? "unblock users" : "block users");
 
-  const vm = useUsersViewModel(
-    blockedOnly ? "blocked" : "all"
-  );
+  const [userFilter, setUserFilter] = useState<"all" | "active" | "blocked">(blockedOnly ? "blocked" : "all");
+  const vm = useUsersViewModel(userFilter);
 
   return (
     <section className="user-management-workspace">
-      <header className="user-activity-header">
-        <div>
-          <h2>
-            {blockedOnly
-              ? "Inactive / blocked users"
-              : "All users"}
-          </h2>
 
-          <p>
-            {blockedOnly
-              ? "Accounts that need administrative attention."
-              : "Registered users, including newly registered users."}
-          </p>
-        </div>
 
-        <RefreshButton refreshing={vm.isFetching} label="the user list" onRefresh={() => vm.refresh()} />
-      </header>
+      <StatusTabs label="Filter users by status" value={userFilter} onChange={(value) => { vm.onSearch(vm.search); setUserFilter(value as "all" | "active" | "blocked"); }} tabs={[{ id: "all", label: "All users", count: vm.userCounts.all }, { id: "active", label: "Active", count: vm.userCounts.active }, { id: "blocked", label: "Inactive / Blocked", count: vm.userCounts.blocked }]} />
+      <TransientSuccessMessage message={vm.successMessage} />
 
       {vm.errorMessage && (
         <div className="api-state api-state--error">
           {vm.errorMessage}
         </div>
       )}
-
-      <div className="workspace-stat-row">
-        <div>
-          <strong>{vm.isLoading ? "…" : vm.users.length}</strong>
-          <span>Users</span>
-        </div>
-      </div>
-
-      <div className="list-search">
-        <input
-          type="search"
-          value={vm.search}
-          onChange={(e) =>
-            vm.onSearch(e.target.value)
-          }
-          placeholder="Search by name, email or phone…"
-          aria-label="Search users"
-        />
-      </div>
+      <ListToolbar value={vm.search} onChange={vm.onSearch} placeholder="Search by name, email, phone or customer ID..." label="the user list" refreshing={vm.isFetching} onRefresh={() => vm.refresh()} />
 
       {vm.isLoading && (
         <SkeletonTable
@@ -291,7 +276,19 @@ function UsersTable({
 
               <tbody>
                 {vm.users.map((user) => (
-                  <tr key={user.id}>
+                  <tr
+                    key={user.customer_id || user.id}
+                    className="clickable-list-row"
+                    tabIndex={0}
+                    aria-label={`Open details for ${user.full_name || "user"}`}
+                    onClick={() => vm.setSelectedUser(user)}
+                    onKeyDown={(event) => {
+                      if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
+                        event.preventDefault();
+                        vm.setSelectedUser(user);
+                      }
+                    }}
+                  >
                     <td>
                       <div className="user-cell">
                         <UserAvatar
@@ -302,58 +299,47 @@ function UsersTable({
                           size="medium"
                         />
 
-                        <span>
-                          <strong>
-                            {user.full_name ??
-                              "Unnamed user"}
-                          </strong>
+                      <span>
+                          <button
+                            type="button"
+                            className="table-link-button"
+                            onClick={(event) => { event.stopPropagation(); vm.setSelectedUser(user); }}
+                            aria-label={`View ${user.full_name || "user"}`}
+                          >
+                            {user.full_name ?? "Unnamed user"}
+                          </button>
 
                           <small>
-                            ID {user.id}
+                            ID {user.customer_id || user.id}
                           </small>
                         </span>
                       </div>
                     </td>
 
                     <td>
-                      {user.email ?? "—"}
+                      {user.email ?? "-"}
                     </td>
 
                     <td>
-                      {user.phone ?? "—"}
+                      {user.phone ?? "-"}
                     </td>
 
                     <td>
-                      <span className="role-pill">
-                        {user.status}
-                      </span>
+                      <ManagementStatus status={user.status} />
                     </td>
 
                     <td>
-                      <button
-                        className="table-action"
-                        type="button"
-                        onClick={() =>
-                          vm.setSelectedUser(user)
-                        }
-                      >
-                        View
-                      </button>
-
-                      <button
-                        className="table-action table-action--danger"
-                        type="button"
+                      <ManagementActionButton
+                        action={isUserBlocked(user) ? "unblock" : "block"}
+                        stateIndicator={isUserBlocked(user) ? "blocked" : "active"}
+                        ariaLabel={isUserBlocked(user) ? `Unblock ${user.full_name || "user"}` : `Block ${user.full_name || "user"}`}
                         onClick={() =>
                           vm.toggleBlock(user)
                         }
                         disabled={!canUpdateUsers || vm.isUpdating}
-                        data-tooltip={!canUpdateUsers ? blockUserHint(user) : vm.isUpdating ? "Please wait, another user's status is being updated" : undefined}
-                        data-tooltip-kind={canUpdateUsers ? undefined : "access"}
-                      >
-                        {isUserBlocked(user)
-                          ? "Unblock"
-                          : "Block"}
-                      </button>
+                        tooltip={!canUpdateUsers ? blockUserHint(user) : vm.isUpdating ? "Please wait, another user's status is being updated" : undefined}
+                        tooltipKind={canUpdateUsers ? undefined : "access"}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -367,37 +353,7 @@ function UsersTable({
             )}
           </div>
 
-          <div className="assign-role-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={vm.goToPreviousPage}
-              disabled={
-                !vm.hasPreviousPage ||
-                vm.isFetching
-              }
-              data-tooltip={!vm.hasPreviousPage ? "You are already on the first page" : vm.isFetching ? "Still loading, please wait" : undefined}
-            >
-              ← Previous
-            </button>
-
-            <span>
-              Page {vm.page}
-            </span>
-
-            <button
-              type="button"
-              className="primary-button"
-              onClick={vm.goToNextPage}
-              disabled={
-                !vm.hasNextPage ||
-                vm.isFetching
-              }
-              data-tooltip={!vm.hasNextPage ? "You are already on the last page" : vm.isFetching ? "Still loading, please wait" : undefined}
-            >
-              Next →
-            </button>
-          </div>
+          {vm.users.length > 0 && <ListPagination page={vm.page} count={vm.totalPages} onChange={vm.setPage} disabled={vm.isFetching} />}
         </>
       )}
 
@@ -412,6 +368,7 @@ function UsersTable({
           }
           isUpdating={vm.isUpdating}
           canUpdate={canUpdateUsers}
+          successMessage={vm.successMessage}
         />
       )}
     </section>
@@ -424,12 +381,14 @@ function UserDetailsPanel({
   onToggleBlock,
   isUpdating,
   canUpdate,
+  successMessage,
 }: {
   user: CustomerUser;
   onClose: () => void;
   onToggleBlock: () => void;
   isUpdating: boolean;
   canUpdate: boolean;
+  successMessage: string;
 }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -465,7 +424,7 @@ function UserDetailsPanel({
               {user.full_name ?? "Unnamed user"}
             </h3>
 
-            <small>{user.id}</small>
+            <small>{user.customer_id || user.id}</small>
           </span>
         </div>
 
@@ -478,31 +437,33 @@ function UserDetailsPanel({
         </button>
       </div>
 
+      <TransientSuccessMessage message={successMessage} />
+
       <div className="user-detail-grid">
         <article>
           <span>Name</span>
           <strong>
-            {user.full_name ?? "—"}
+            {user.full_name ?? "-"}
           </strong>
         </article>
 
         <article>
           <span>Email</span>
           <strong>
-            {user.email ?? "—"}
+            {user.email ?? "-"}
           </strong>
         </article>
 
         <article>
           <span>Phone</span>
           <strong>
-            {user.phone ?? "—"}
+            {user.phone ?? "-"}
           </strong>
         </article>
 
         <article>
           <span>Status</span>
-          <strong>{user.status}</strong>
+          <strong>{formatStatusLabel(user.status)}</strong>
         </article>
       </div>
 
@@ -535,100 +496,6 @@ function UserDetailsPanel({
   );
 }
 
-function RiderWorkspace({
-  subsection,
-}: {
-  subsection: string;
-}) {
-  const {
-    data: riders = [],
-    isLoading,
-    isFetching,
-    isError,
-    refetch,
-  } = useGetRidersQuery();
-
-  if (subsection === "riders-approvals") {
-    const pendingRiders = riders.filter(
-      (rider) =>
-        String(rider.status).toLowerCase() ===
-        "pending"
-    );
-
-    return (
-      <OperationalWorkspace
-        title="Approvals"
-        eyebrow="APPROVALS"
-        description="Review rider applications and verification status."
-        rows={pendingRiders.map((rider) => [
-          rider.full_name ?? "Unnamed rider",
-          rider.id,
-          rider.status ?? "—",
-        ])}
-        columns={["Rider", "ID", "Status"]}
-        loading={isLoading}
-        error={isError}
-        onRefresh={() => refetch()}
-        refreshing={isFetching}
-      />
-    );
-  }
-
-  if (subsection === "riders-blocked") {
-    const blockedRiders = riders.filter((rider) =>
-      ["blocked", "inactive"].includes(
-        String(rider.status).toLowerCase()
-      )
-    );
-
-    return (
-      <OperationalWorkspace
-        title="Inactive / Blocked"
-        eyebrow="INACTIVE / BLOCKED"
-        description="Riders who are currently unavailable for delivery work."
-        rows={blockedRiders.map((rider) => [
-          rider.full_name ?? "Unnamed rider",
-          rider.id,
-          rider.status ?? "—",
-        ])}
-        columns={["Rider", "ID", "Status"]}
-        loading={isLoading}
-        error={isError}
-        onRefresh={() => refetch()}
-        refreshing={isFetching}
-      />
-    );
-  }
-
-  if (subsection === "riders-complaints") {
-    return (
-      <ComingSoonPanel
-        eyebrow="COMPLAINTS"
-        title="Rider complaints"
-        description="Complaint data is not connected to an API yet."
-      />
-    );
-  }
-
-  return (
-    <OperationalWorkspace
-      title="All Riders"
-      eyebrow="ALL RIDERS"
-      description="A clear view of rider accounts and current status."
-      rows={riders.map((rider) => [
-        rider.full_name ?? "Unnamed rider",
-        rider.id,
-        rider.status ?? "—",
-      ])}
-      columns={["Rider", "ID", "Status"]}
-      loading={isLoading}
-      error={isError}
-      onRefresh={() => refetch()}
-      refreshing={isFetching}
-    />
-  );
-}
-
 function OrderWorkspace({
   subsection,
 }: {
@@ -640,115 +507,93 @@ function OrderWorkspace({
     isFetching,
     isError,
     refetch,
-  } = useGetOrdersQuery();
+  } = useGetAllOrdersQuery();
 
-  const visibleOrders =
-    subsection === "orders-active"
-      ? orders.filter(
-        (order) =>
-          ![
-            "cancelled",
-            "completed",
-            "delivered",
-          ].includes(
-            String(order.status).toLowerCase()
-          )
-      )
-      : subsection === "orders-cancelled"
-        ? orders.filter(
-          (order) =>
-            String(order.status).toLowerCase() ===
-            "cancelled"
-        )
-        : orders;
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [orderFilter, setOrderFilter] = useState<"all" | "active" | "delivered" | "cancelled">(subsection === "orders-active" ? "active" : subsection === "orders-delivered" ? "delivered" : subsection === "orders-cancelled" ? "cancelled" : "all");
+  useEffect(() => {
+    setOrderFilter(subsection === "orders-active" ? "active" : subsection === "orders-delivered" ? "delivered" : subsection === "orders-cancelled" ? "cancelled" : "all");
+  }, [subsection]);
+  const activeOrders = orders.filter((order) => !["CANCELLED", "DELIVERED"].includes(String(order.status).toUpperCase()));
+  const cancelledOrders = orders.filter((order) => String(order.status).toUpperCase() === "CANCELLED");
+  const deliveredOrders = orders.filter((order) => String(order.status).toUpperCase() === "DELIVERED");
+  const visibleOrders = orderFilter === "active" ? activeOrders : orderFilter === "delivered" ? deliveredOrders : orderFilter === "cancelled" ? cancelledOrders : orders;
+  const title = orderFilter === "active" ? "Active Orders" : orderFilter === "delivered" ? "Delivered Orders" : orderFilter === "cancelled" ? "Cancelled Orders" : "All Orders";
+  const description = orderFilter === "active" ? "Orders that are currently moving through the delivery flow." : orderFilter === "delivered" ? "Orders that have been delivered." : orderFilter === "cancelled" ? "Orders that have been cancelled." : "Orders returned from the orders API.";
 
-  const title =
-    subsection === "orders-active"
-      ? "Active Orders"
-      : subsection === "orders-cancelled"
-        ? "Cancelled Orders"
-        : "All Orders";
-
-  const description =
-    subsection === "orders-active"
-      ? "Orders that are currently moving through the delivery flow."
-      : subsection === "orders-cancelled"
-        ? "Orders that have been cancelled."
-        : "Orders returned from the orders API.";
+  const orderItems = (order: Order) => order.items?.length
+    ? order.items.map((item) => `${item.name ?? item.item_name ?? "Item"} × ${item.quantity ?? item.qty ?? 1}`).join(", ")
+    : order.items_summary || "Not provided";
+  const detailRows = selectedOrder ? [
+    ["Order number", selectedOrder.order_number],
+    ["Customer name", selectedOrder.customer_name],
+    ["Mobile number", selectedOrder.customer_phone ?? selectedOrder.customer_mobile],
+    ["PNR", selectedOrder.pnr],
+    ["Train", [selectedOrder.train_number, selectedOrder.train_name].filter(Boolean).join(" · ")],
+    ["Coach / seat", [selectedOrder.coach, selectedOrder.seat].filter(Boolean).join(" / ")],
+    ["Delivery station", [selectedOrder.delivery_station_name, selectedOrder.delivery_station_code].filter(Boolean).join(" · ")],
+    ["Restaurant", [selectedOrder.restaurant_name, selectedOrder.restaurant_id].filter(Boolean).join(" · ")],
+    ["Items", orderItems(selectedOrder)],
+    ["Total", formatOrderTotal(selectedOrder.total)],
+  ] : [];
 
   return (
+    <>
+    {selectedOrder && (
+      <ReviewModal
+        title={`Order ${selectedOrder.order_number ?? ""}`.trim()}
+        subtitle="Order details"
+        compact
+        closeOnAnyClick
+        statusBadge={<OrderStatus status={selectedOrder.status ?? ""} />}
+        onClose={() => setSelectedOrder(null)}
+        footer={<button type="button" className="secondary-button" onClick={() => setSelectedOrder(null)}>Close</button>}
+      >
+        <dl className="order-details">
+          {detailRows.map(([label, value]) => <div key={label} className={label === "Items" || label === "Restaurant" ? "order-details__wide" : undefined}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}
+        </dl>
+      </ReviewModal>
+    )}
     <OperationalWorkspace
+      onRowClick={(index) => setSelectedOrder(visibleOrders[index])}
       title={title}
       eyebrow={title.toUpperCase()}
       description={description}
       rows={visibleOrders.map((order) => [
-        order.order_number ?? "—",
-        order.restaurant_id ?? "—",
-        order.restaurant_name ?? "—",
-        order.delivery_station_name
-          ? `${order.delivery_station_name}${order.delivery_station_code ? ` (${order.delivery_station_code})` : ""}`
-          : "—",
-        order.total == null ? "—" : `₹${Number(order.total).toLocaleString("en-IN")}`,
-        order.status_label ?? order.status ?? "—",
+        order.order_number || "-",
+        order.station_name || order.boarding_station_name || order.delivery_station_name || "-",
+        order.restaurant_id || "-",
+        order.restaurant_name || "-",
+        order.train_name || "-",
+        formatOrderTotal(order.total),
+        order.status || "-",
       ])}
+      renderStatus={(status) => <OrderStatus status={status} />}
       columns={[
         "Order Number",
+        "Station Name",
         "Restaurant ID",
-        "Restaurant",
-        "Delivery Station",
-        "Total",
+        "Restaurant Name",
+        "Train Name",
+        "Amount",
         "Status",
       ]}
       loading={isLoading}
       error={isError}
       onRefresh={() => refetch()}
       refreshing={isFetching}
+      filterTabs={[{ id: "all", label: "All Orders", count: orders.length }, { id: "active", label: "Active", count: activeOrders.length }, { id: "delivered", label: "Delivered", count: deliveredOrders.length }, { id: "cancelled", label: "Cancelled", count: cancelledOrders.length }]}
+      activeFilter={orderFilter}
+      onFilterChange={(value) => setOrderFilter(value as "all" | "active" | "delivered" | "cancelled")}
     />
+    </>
   );
 }
 
-function SalesWorkspace({
-  subsection,
-}: {
-  subsection: string;
-}) {
-  const titleMap: Record<
-    string,
-    { title: string; description: string }
-  > = {
-    "sales-transactions": {
-      title: "Transactions",
-      description:
-        "Transaction data is not connected to an API yet.",
-    },
-    "sales-settlements": {
-      title: "Settlements",
-      description:
-        "Settlement data is not connected to an API yet.",
-    },
-    "sales-payouts": {
-      title: "Restaurant Payouts",
-      description:
-        "Payout data is not connected to an API yet.",
-    },
-    "sales-reports": {
-      title: "Revenue Reports",
-      description:
-        "Revenue report data is not connected to an API yet.",
-    },
-  };
-
-  const copy =
-    titleMap[subsection] ??
-    titleMap["sales-transactions"];
-
-  return (
-    <ComingSoonPanel
-      eyebrow="SALES"
-      title={copy.title}
-      description={copy.description}
-    />
-  );
+function formatOrderTotal(value: number | string | null | undefined): string {
+  if (value == null || value === "") return "-";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `₹${amount.toLocaleString("en-IN")}` : "-";
 }
 
 const marketingCopy: Record<
@@ -842,9 +687,13 @@ function ReportsWorkspace({
 function RestaurantWorkspace({
   subsection,
   canAddCategory,
+  canBlockRestaurants,
+  canUnblockRestaurants,
 }: {
   subsection: string;
   canAddCategory: boolean;
+  canBlockRestaurants: boolean;
+  canUnblockRestaurants: boolean;
 }) {
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<Restaurant | null>(null);
@@ -856,7 +705,7 @@ function RestaurantWorkspace({
     isError,
     error: queryError,
     refetch,
-  } = useGetRestaurantsQuery();
+  } = useGetAllRestaurantsQuery();
 
   useEffect(() => {
     setSelectedRestaurant(null);
@@ -874,33 +723,6 @@ function RestaurantWorkspace({
 
   if (subsection === "restaurants-approvals") {
     return <RestaurantApprovalsView />;
-  }
-
-  if (subsection === "restaurants-blocked") {
-    const blockedRestaurants =
-      restaurants.filter((restaurant) =>
-        ["blocked", "inactive"].includes(
-          String(restaurant.status).toLowerCase()
-        )
-      );
-
-    return (
-      <OperationalWorkspace
-        title="Inactive / Blocked Restaurants"
-        eyebrow="INACTIVE / BLOCKED"
-        description="Restaurants that are currently unavailable."
-        rows={blockedRestaurants.map((restaurant) => [
-          restaurant.name,
-          restaurant.id,
-          restaurant.status ?? "—",
-        ])}
-        columns={["Restaurant", "ID", "Status"]}
-        loading={isLoading}
-        error={isError}
-        onRefresh={() => refetch()}
-        refreshing={isFetching}
-      />
-    );
   }
 
   if (subsection === "restaurants-complaints") {
@@ -928,6 +750,8 @@ function RestaurantWorkspace({
       restaurants={restaurants}
       onSelect={setSelectedRestaurant}
       canAddCategory={canAddCategory}
+      canBlockRestaurants={canBlockRestaurants}
+      canUnblockRestaurants={canUnblockRestaurants}
       loading={isLoading}
       error={isError}
       errorDetail={describeQueryError(queryError)}
@@ -940,13 +764,15 @@ function RestaurantWorkspace({
 function describeQueryError(error: unknown): string | undefined {
   if (!error || typeof error !== "object") return undefined;
   const { status, data } = error as { status?: number | string; data?: { message?: string } };
-  return [status, data?.message].filter(Boolean).join(" — ") || undefined;
+  return [status, data?.message].filter(Boolean).join(" - ") || undefined;
 }
 
 function RestaurantList({
   restaurants,
   onSelect,
   canAddCategory,
+  canBlockRestaurants,
+  canUnblockRestaurants,
   loading,
   error,
   errorDetail,
@@ -956,65 +782,92 @@ function RestaurantList({
   restaurants: Restaurant[];
   onSelect: (restaurant: Restaurant) => void;
   canAddCategory: boolean;
+  canBlockRestaurants: boolean;
+  canUnblockRestaurants: boolean;
   loading: boolean;
   error: boolean;
   errorDetail?: string;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
+  const [updateRestaurantBlocked] = useSetRestaurantBlockedMutation();
+  const [updatingRestaurantId, setUpdatingRestaurantId] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [restaurantFilter, setRestaurantFilter] = useState<"all" | "active" | "inactive" | "blocked">("all");
   const [categoryPanelOpen, setCategoryPanelOpen] = useState(false);
   const term = search.trim().toLowerCase();
+  const activeRestaurants = restaurants.filter((restaurant) => String(restaurant.status).toLowerCase() === "active");
+  const inactiveRestaurants = restaurants.filter((restaurant) => String(restaurant.status).toLowerCase() === "inactive");
+  const blockedRestaurants = restaurants.filter((restaurant) => String(restaurant.status).toLowerCase() === "blocked");
+  const filteredRestaurants = restaurantFilter === "active"
+    ? activeRestaurants
+    : restaurantFilter === "inactive"
+      ? inactiveRestaurants
+      : restaurantFilter === "blocked"
+        ? blockedRestaurants
+        : restaurants;
   const matching = term
-    ? restaurants.filter((restaurant) => restaurant.name.toLowerCase().includes(term))
-    : restaurants;
+    ? filteredRestaurants.filter((restaurant) => [
+        restaurant.id,
+        restaurant.name,
+        restaurant.type,
+        restaurant.ownerName,
+        restaurant.phone,
+        restaurant.email,
+        restaurant.status,
+        restaurant.rating == null ? null : String(restaurant.rating),
+      ].some((value) => String(value ?? "").toLowerCase().includes(term)))
+    : filteredRestaurants;
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(matching.length / pageSize));
+  const pagedRestaurants = matching.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => setPage(1), [search, restaurantFilter]);
+
+  const toggleRestaurantBlocked = async (restaurant: Restaurant) => {
+    const isBlocked = ["inactive", "blocked"].includes(String(restaurant.status).toLowerCase());
+    setUpdatingRestaurantId(restaurant.id);
+    setStatusError(null);
+    setStatusSuccess(null);
+    try {
+      await updateRestaurantBlocked({ id: restaurant.id, blocked: !isBlocked }).unwrap();
+      setStatusSuccess(`Restaurant ${isBlocked ? "unblocked" : "blocked"} successfully.`);
+    } catch (error) {
+      setStatusError(describeQueryError(error) ?? "Unable to update restaurant status.");
+    } finally {
+      setUpdatingRestaurantId(null);
+    }
+  };
 
   return (
     <section className="user-management-workspace">
-      <header className="user-activity-header">
-        <div>
-          <h2>All restaurants</h2>
-          <p>
-            Restaurants returned from the current
-            database response.
-          </p>
+      <header className="employee-directory-header restaurant-directory-header">
+        <div className="employee-directory-controls">
+          <StatusTabs
+            label="Filter restaurants by status"
+            value={restaurantFilter}
+            onChange={(value) => setRestaurantFilter(value as "all" | "active" | "inactive" | "blocked")}
+            tabs={[
+              { id: "all", label: "All Restaurants", count: restaurants.length },
+              { id: "active", label: "Active", count: activeRestaurants.length },
+              { id: "inactive", label: "Inactive", count: inactiveRestaurants.length },
+              { id: "blocked", label: "Blocked", count: blockedRestaurants.length },
+            ]}
+          />
         </div>
-
-        <div className="employee-header-actions">
-          <RefreshButton refreshing={refreshing} label="the restaurants" onRefresh={onRefresh} />
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => setCategoryPanelOpen(true)}
-            disabled={!canAddCategory}
-            data-tooltip={canAddCategory ? "Add a food category for restaurants and view all categories." : noAccess("add categories")}
-            data-tooltip-kind="access"
-          >
-            Add food category
-          </button>
-        </div>
+        <SectionActions>
+          <PrimaryActionButton type="button" onClick={() => setCategoryPanelOpen(true)} disabled={!canAddCategory}
+            data-tooltip={canAddCategory ? "Add a food category for restaurants and view all categories." : noAccess("add categories")} data-tooltip-kind="access">Add food category</PrimaryActionButton>
+        </SectionActions>
       </header>
 
       <AddCategoryPanel open={categoryPanelOpen} onClose={() => setCategoryPanelOpen(false)} />
 
-      <div className="workspace-stat-row">
-        <div>
-          <strong>
-            {loading ? "…" : term ? `${matching.length} of ${restaurants.length}` : restaurants.length}
-          </strong>
-          <span>Restaurants</span>
-        </div>
-      </div>
+      <TransientSuccessMessage message={statusSuccess} />
 
-      <div className="list-search">
-        <input
-          type="search"
-          placeholder="Search restaurants by name"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          aria-label="Search restaurants by name"
-        />
-      </div>
+      {statusError && <div className="api-state api-state--error" role="alert">{statusError}</div>}
 
       {error && (
         <div className="api-state api-state--error">
@@ -1024,9 +877,11 @@ function RestaurantList({
         </div>
       )}
 
+      <ListToolbar value={search} onChange={setSearch} placeholder="Search by restaurant, owner, email, phone or ID..." label="the restaurants" refreshing={refreshing} onRefresh={onRefresh} />
+
       {loading && !error && (
         <SkeletonTable
-          columns={["Restaurant", "Contact", "Online", "Rating", "Action"]}
+          columns={["Restaurant", "Contact", "Status", "Rating", "Action"]}
         />
       )}
 
@@ -1037,20 +892,38 @@ function RestaurantList({
               <tr>
                 <th>Restaurant</th>
                 <th>Contact</th>
-                <th>Online</th>
+                <th>Status</th>
                 <th>Rating</th>
                 <th>Action</th>
               </tr>
             </thead>
 
             <tbody>
-              {matching.map((restaurant) => (
-                <tr key={restaurant.id}>
+              {pagedRestaurants.map((restaurant) => {
+                const isBlocked = ["inactive", "blocked"].includes(String(restaurant.status).toLowerCase());
+                const action = isBlocked ? "unblock" : "block";
+                const allowed = isBlocked ? canUnblockRestaurants : canBlockRestaurants;
+                const updating = updatingRestaurantId === restaurant.id;
+
+                return (
+                <tr
+                  key={restaurant.id}
+                  className="clickable-list-row"
+                  tabIndex={0}
+                  aria-label={`Open details for ${restaurant.name || "restaurant"}`}
+                  onClick={() => onSelect(restaurant)}
+                  onKeyDown={(event) => {
+                    if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
+                      event.preventDefault();
+                      onSelect(restaurant);
+                    }
+                  }}
+                >
                   <td>
                     <div className="restaurant-cell">
-                      <UserAvatar name={restaurant.name} size="medium" />
+                      <UserAvatar name={restaurant.name} imageUrl={restaurant.logoUrl} size="medium" />
                       <div>
-                        <button type="button" className="table-link-button" onClick={() => onSelect(restaurant)}>
+                        <button type="button" className="table-link-button" onClick={(event) => { event.stopPropagation(); onSelect(restaurant); }}>
                           {restaurant.name}
                         </button>
                         {restaurant.type && (
@@ -1063,47 +936,42 @@ function RestaurantList({
                   <td>
                     <div className="contact-cell">
                       {restaurant.ownerName && <strong>{restaurant.ownerName}</strong>}
-                      <span>{restaurant.phone ?? "—"}</span>
+                      <span>{restaurant.phone ?? "-"}</span>
                       {restaurant.email && <span>{restaurant.email}</span>}
                     </div>
                   </td>
 
                   <td>
-                    {restaurant.onlineStatus ? (
-                      <span className={`status-pill${restaurant.onlineStatus === "OPEN" ? " status-pill--live" : ""}`}>
-                        <i />
-                        {restaurant.onlineStatus === "OPEN" ? "Open" : "Closed"}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
+                    <ManagementStatus status={restaurant.status} />
                   </td>
 
-                  <td>{restaurant.rating != null ? `★ ${restaurant.rating}` : "—"}</td>
+                  <td>{restaurant.rating != null ? `★ ${restaurant.rating.toFixed(1)}` : <span className="restaurant-cell__type">No ratings yet</span>}</td>
 
                   <td>
-                    <button
-                      type="button"
-                      className="table-action"
-                      onClick={() =>
-                        onSelect(restaurant)
-                      }
-                    >
-                      View
-                    </button>
+                    <ManagementActionButton
+                      action={action}
+                      stateIndicator={isBlocked ? "blocked" : "active"}
+                      ariaLabel={`${isBlocked ? "Unblock" : "Block"} ${restaurant.name || "restaurant"}`}
+                      onClick={() => toggleRestaurantBlocked(restaurant)}
+                      disabled={!allowed || updating}
+                      tooltip={!allowed ? noAccess(isBlocked ? "activate restaurants" : "block restaurants") : updating ? "Please wait, restaurant status is being updated" : undefined}
+                      tooltipKind={!allowed ? "access" : undefined}
+                    />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
 
           {!matching.length && (
             <div className="api-state">
-              {restaurants.length ? `No restaurants match "${search.trim()}".` : "No restaurants found."}
+              {restaurants.length ? `No ${restaurantFilter === "all" ? "" : `${restaurantFilter} `}restaurants${search.trim() ? ` match "${search.trim()}"` : " found"}.` : "No restaurants found."}
             </div>
           )}
         </div>
       )}
+      {!loading && !error && matching.length > 0 && <ListPagination page={page} count={totalPages} onChange={setPage} disabled={refreshing} />}
     </section>
   );
 }
@@ -1113,16 +981,26 @@ function OperationalWorkspace({
   eyebrow,
   description,
   rows: allRows,
+  renderStatus,
   columns,
   loading = false,
   error = false,
   onRefresh,
   refreshing = false,
+  filterTabs,
+  activeFilter,
+  onFilterChange,
+  onRowClick,
 }: {
+  onRowClick?: (rowIndex: number) => void;
   title: string;
   eyebrow?: string;
   description: string;
   rows: string[][];
+  renderStatus?: (status: string) => ReactNode;
+  filterTabs?: { id: string; label: string; count: number }[];
+  activeFilter?: string;
+  onFilterChange?: (value: string) => void;
   columns: string[];
   loading?: boolean;
   error?: boolean;
@@ -1131,45 +1009,21 @@ function OperationalWorkspace({
 }) {
   const [search, setSearch] = useState("");
   const term = search.trim().toLowerCase();
-  const rows = term
-    ? allRows.filter((row) => row.some((value) => String(value).toLowerCase().includes(term)))
-    : allRows;
+  const matchingIndexes = allRows.map((_, index) => index).filter((index) => !term || allRows[index].some((value) => String(value).toLowerCase().includes(term)));
+  const matchingRows = matchingIndexes.map((index) => allRows[index]);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(matchingRows.length / pageSize));
+  const pageOffset = (page - 1) * pageSize;
+  const rows = matchingRows.slice(pageOffset, page * pageSize);
+  useEffect(() => setPage(1), [search, activeFilter]);
 
   return (
     <section className="user-management-workspace">
-      <header className="user-activity-header">
-        <div>
-          {eyebrow && (
-            <span className="eyebrow">
-              {eyebrow}
-            </span>
-          )}
 
-          <h2>{title}</h2>
-          <p>{description}</p>
-        </div>
 
-        {onRefresh && <RefreshButton refreshing={refreshing} onRefresh={onRefresh} />}
-      </header>
-
-      <div className="workspace-stat-row">
-        <div>
-          <strong>
-            {loading ? "…" : term ? `${rows.length} of ${allRows.length}` : rows.length}
-          </strong>
-          <span>Items in this view</span>
-        </div>
-      </div>
-
-      <div className="list-search">
-        <input
-          type="search"
-          placeholder="Search this list"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          aria-label="Search this list"
-        />
-      </div>
+      {filterTabs && onFilterChange && <StatusTabs label={`${title} status filters`} value={activeFilter ?? ""} onChange={onFilterChange} tabs={filterTabs} />}
+      <ListToolbar value={search} onChange={setSearch} placeholder="Search this list" label={title.toLowerCase()} refreshing={refreshing} onRefresh={() => onRefresh?.()} />
 
       {error && (
         <div className="api-state api-state--error">
@@ -1197,6 +1051,11 @@ function OperationalWorkspace({
               {rows.map((row, index) => (
                 <tr
                   key={`${row[0]}-${index}`}
+                  className={onRowClick ? "user-table-row--clickable" : undefined}
+                  style={onRowClick ? { cursor: "pointer" } : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onClick={onRowClick ? () => onRowClick(matchingIndexes[pageOffset + index]) : undefined}
+                  onKeyDown={onRowClick ? (event) => { if (event.key === "Enter") onRowClick(matchingIndexes[pageOffset + index]); } : undefined}
                 >
                   {row.map(
                     (value, cellIndex) => (
@@ -1205,8 +1064,8 @@ function OperationalWorkspace({
                       >
                         {cellIndex ===
                           row.length - 1 ? (
-                          <span className="role-pill">
-                            {value}
+                          renderStatus ? renderStatus(value) : <span className="role-pill">
+                            {formatStatusLabel(typeof value === "string" ? value : String(value ?? ""))}
                           </span>
                         ) : (
                           value
@@ -1226,6 +1085,7 @@ function OperationalWorkspace({
           )}
         </div>
       )}
+      {!loading && !error && matchingRows.length > 0 && <ListPagination page={page} count={totalPages} onChange={setPage} disabled={refreshing} />}
     </section>
   );
 }

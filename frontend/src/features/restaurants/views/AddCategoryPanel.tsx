@@ -1,9 +1,13 @@
 "use client";
 
+import { UserAvatar } from "../../admin/components/UserAvatar";
 import { useEffect, useRef, useState } from "react";
 
 import { RefreshButton } from "../../admin/components/RefreshButton";
 import { SidePanel } from "../../admin/components/SidePanel";
+import { TransientSuccessMessage } from "../../admin/components/TransientSuccessMessage";
+import { PrimaryActionButton } from "../../admin/components/PrimaryActionButton";
+import { RequiredFieldMark } from "../../admin/components/RequiredFieldMark";
 import { disabledReason } from "../../admin/models/disabledReason";
 import { useCreateAdminCategoryMutation, useGetAdminCategoriesQuery } from "../api/categoriesApi";
 
@@ -114,7 +118,7 @@ export function AddCategoryPanel({ open, onClose }: Props) {
     >
       <div className="form-grid">
         <label className="station-picker-slot">
-          <span>Category name *</span>
+          <span>Category name<RequiredFieldMark /></span>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -124,6 +128,7 @@ export function AddCategoryPanel({ open, onClose }: Props) {
             placeholder="e.g. Biryani"
             maxLength={NAME_MAX}
             disabled={saving}
+            required
           />
           {showError && nameError ? (
             <small className="field-error" role="alert">{nameError}</small>
@@ -133,7 +138,7 @@ export function AddCategoryPanel({ open, onClose }: Props) {
         </label>
 
         <div className="station-picker-slot image-field">
-          <span className="image-field__label">Category image *</span>
+          <span className="image-field__label">Category image<RequiredFieldMark /></span>
           <input
             key={fileInputKey}
             ref={fileInput}
@@ -193,21 +198,20 @@ export function AddCategoryPanel({ open, onClose }: Props) {
       </div>
 
       {formError && <div className="api-state api-state--error">{formError}</div>}
-      {savedMessage && <div className="api-state">{savedMessage}</div>}
+      <TransientSuccessMessage message={savedMessage} className="api-state api-state--success" />
 
       <div className="assign-role-actions">
         <button type="button" className="secondary-button" onClick={close} disabled={saving}>
           Close
         </button>
-        <button
+        <PrimaryActionButton
           type="button"
-          className="primary-button"
           onClick={submit}
           disabled={Boolean(saveBlocked)}
           data-tooltip={saveBlocked}
         >
           {saving ? "Saving…" : "Add food category"}
-        </button>
+        </PrimaryActionButton>
       </div>
 
       <div className="category-list">
@@ -226,7 +230,7 @@ export function AddCategoryPanel({ open, onClose }: Props) {
           <ul>
             {categories.map((category) => (
               <li key={category.category_id}>
-                {category.cat_img_url && <img className="category-thumb" src={category.cat_img_url} alt="" />}
+                <UserAvatar name={category.category_name} imageUrl={category.cat_img_url} size="small" />
                 <strong>{category.category_name}</strong>
                 <span>
                   {category.category_id}

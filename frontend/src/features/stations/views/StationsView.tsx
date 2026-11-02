@@ -1,32 +1,43 @@
-"use client";
+﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Icon } from "../../admin/components/Icon";
+import { ManagementActionButton } from "../../admin/components/ManagementActionButton";
+import { ManagementStatus } from "../../admin/components/ManagementStatus";
+import { TransientSuccessMessage } from "../../admin/components/TransientSuccessMessage";
+import { ListToolbar } from "../../admin/components/ListToolbar";
 import { RefreshButton } from "../../admin/components/RefreshButton";
+import { ListPagination } from "../../admin/components/ListPagination";
+import { StatusTabs } from "../../admin/components/StatusTabs";
+import { PrimaryActionButton } from "../../admin/components/PrimaryActionButton";
+import { SectionActions } from "../../admin/components/SectionActions";
+import { SoftGreenButton } from "../../admin/components/SoftGreenButton";
 import { SidePanel } from "../../admin/components/SidePanel";
+import { RequiredFieldMark } from "../../admin/components/RequiredFieldMark";
 import { SkeletonTable } from "../../admin/components/Skeleton";
 import { UserAvatar } from "../../admin/components/UserAvatar";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
+import { formatStatusLabel } from "../../admin/models/formatStatusLabel";
 import { StationLocationPicker, type PickedLocation } from "../components/StationLocationPicker";
 import { useGetAllOrdersQuery } from "../../orders/api/ordersApi";
 import {
   useCreateStationMutation,
-  useGetStationsQuery,
+  useGetAllStationsQuery,
   useUpdateStationMutation,
   type Station,
   type StationInput,
 } from "../api/stationsApi";
 
 type Props = {
-  /** One of stations-all, stations-active, stations-inactive, stations-performance. */
+  /** One of stations-all or stations-performance. */
   subsection: string;
   canInsert: boolean;
   canUpdate: boolean;
 };
 
 export function StationsView({ subsection, canInsert, canUpdate }: Props) {
-  const stationsQuery = useGetStationsQuery();
+  const stationsQuery = useGetAllStationsQuery();
 
   if (subsection === "stations-performance") {
     return <StationPerformance query={stationsQuery} />;
@@ -34,8 +45,6 @@ export function StationsView({ subsection, canInsert, canUpdate }: Props) {
 
   return (
     <StationList
-      key={subsection}
-      view={subsection === "stations-active" ? "active" : subsection === "stations-inactive" ? "inactive" : "all"}
       query={stationsQuery}
       canInsert={canInsert}
       canUpdate={canUpdate}
@@ -83,7 +92,7 @@ const toForm = (station: Station): FormValues => ({
   status: isStationActive(station) ? "active" : "inactive",
 });
 
-export type StationView = "all" | "active" | "inactive";
+type StationFilter = "all" | "active" | "inactive";
 
 /** `status` is true for active stations. Older servers omit it, so a station counts as active unless it is false. */
 const isStationActive = (station: Station) => station.status !== false;
@@ -124,18 +133,11 @@ const errorText = (error: unknown, fallback: string): string => {
   return data?.message || fallback;
 };
 
-const formatCoordinate = (station: Station) => {
-  const lat = Number(station.latitude);
-  const lng = Number(station.longitude);
-  if (station.latitude == null || station.longitude == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return "—";
-  return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-};
-
 const formatDate = (value?: string | null) => {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? "—"
+    ? "-"
     : date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
 
@@ -144,12 +146,10 @@ const formatDate = (value?: string | null) => {
 /* ------------------------------------------------------------------ */
 
 function StationList({
-  view,
   query,
   canInsert,
   canUpdate,
 }: {
-  view: StationView;
   query: StationsQuery;
   canInsert: boolean;
   canUpdate: boolean;
@@ -160,6 +160,7 @@ function StationList({
   const [updateStation, { isLoading: isUpdating }] = useUpdateStationMutation();
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StationFilter>("all");
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Station | null>(null);
   const [values, setValues] = useState<FormValues>(emptyForm);
@@ -173,10 +174,13 @@ function StationList({
   const errors = validate(values);
   const hasErrors = Object.keys(errors).length > 0;
 
-  const readOnly = view === "active";
-  const inView = stations.filter((station) =>
-    view === "all" ? true : view === "active" ? isStationActive(station) : !isStationActive(station),
-  );
+  const activeStations = stations.filter(isStationActive);
+  const inactiveStations = stations.filter((station) => !isStationActive(station));
+  const inView = statusFilter === "active"
+    ? activeStations
+    : statusFilter === "inactive"
+      ? inactiveStations
+      : stations;
 
   const term = search.trim().toLowerCase();
   const matching = term
@@ -186,6 +190,11 @@ function StationList({
         ),
       )
     : inView;
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(matching.length / pageSize));
+  const pagedStations = matching.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => setPage(1), [search, statusFilter]);
 
   const changes = useMemo(() => {
     if (!editing) return {};
@@ -237,7 +246,7 @@ function StationList({
     }));
 
   const saveBlocked = disabledReason(
-    [saving, "Saving the station…"],
+    [saving, `Saving the station\u2026`],
     [Boolean(editing) && Object.keys(changes).length === 0, "Change a field to save"],
   );
 
@@ -288,66 +297,39 @@ function StationList({
     }
   };
 
-  const columns = readOnly
-    ? ["Station", "Code", "City", "State", "Coordinates", "Status"]
-    : ["Station", "Code", "City", "State", "Coordinates", "Status", "Added", "Action"];
+  const columns = ["Station", "Code", "City", "State", "Status", "Added", "Action"];
 
-  const eyebrow = view === "active" ? "ACTIVE STATIONS" : view === "inactive" ? "INACTIVE STATIONS" : "ALL STATIONS";
-  const heading = view === "active" ? "Active stations" : view === "inactive" ? "Inactive stations" : "All stations";
-  const emptyText = view === "all" ? "No stations yet. Use “Add station” to create the first one." : `No ${view} stations.`;
 
   return (
     <section className="user-management-workspace">
-      <header className="user-activity-header">
-        <div>
-          <span className="eyebrow">{eyebrow}</span>
-          <h2>{heading}</h2>
-          <p>
-            {view === "active"
-              ? "Stations customers can currently pick."
-              : view === "inactive"
-                ? "Stations hidden from customers. Activate one to make it available again."
-                : "Railway stations customers can order at. Inactive stations are hidden from customers."}
-          </p>
-        </div>
-
-        <div className="employee-header-actions">
-          <RefreshButton refreshing={isFetching} label="the stations" onRefresh={() => refetch()} />
-
-          {!readOnly && (
-            <button
-              type="button"
-              className="primary-button"
-              onClick={openAdd}
-              disabled={!canInsert}
-              data-tooltip={canInsert ? undefined : noAccess("add stations")}
-              data-tooltip-kind="access"
-            >
-              Add station
-            </button>
-          )}
-        </div>
+      <header className="employee-directory-header station-directory-header">
+        <StatusTabs
+          label="Filter stations by status"
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value as StationFilter)}
+          tabs={[
+            { id: "all", label: "All Stations", count: stations.length },
+            { id: "active", label: "Active", count: activeStations.length },
+            { id: "inactive", label: "Inactive / Blocked", count: inactiveStations.length },
+          ]}
+        />
+        <SectionActions>
+          <PrimaryActionButton
+            type="button"
+            onClick={openAdd}
+            disabled={!canInsert}
+            data-tooltip={canInsert ? undefined : noAccess("add stations")}
+            data-tooltip-kind="access"
+          >
+            Add station
+          </PrimaryActionButton>
+        </SectionActions>
       </header>
 
-      {savedMessage && <div className="success-banner">{savedMessage}</div>}
+      <TransientSuccessMessage message={savedMessage} />
       {actionError && <div className="api-state api-state--error">{actionError}</div>}
 
-      <div className="workspace-stat-row">
-        <div>
-          <strong>{isLoading ? "…" : term ? `${matching.length} of ${inView.length}` : inView.length}</strong>
-          <span>{view === "active" ? "Active stations" : view === "inactive" ? "Inactive stations" : "Stations"}</span>
-        </div>
-      </div>
-
-      <div className="list-search">
-        <input
-          type="search"
-          placeholder="Search by station, code, city or state"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          aria-label="Search stations"
-        />
-      </div>
+      <ListToolbar value={search} onChange={setSearch} placeholder="Search by station, code, city or state" label="the stations" refreshing={isFetching} onRefresh={() => refetch()} />
 
       {isError && (
         <div className="api-state api-state--error">
@@ -369,7 +351,7 @@ function StationList({
             </thead>
 
             <tbody>
-              {matching.map((station) => (
+              {pagedStations.map((station) => (
                 <tr key={station.id}>
                   <td>
                     <div className="restaurant-cell">
@@ -379,11 +361,9 @@ function StationList({
                       </div>
                     </div>
                   </td>
-                  <td>{station.code ?? "—"}</td>
-                  <td>{station.city ?? "—"}</td>
-                  <td>{station.state ?? "—"}</td>
-                  <td>{formatCoordinate(station)}</td>
-
+                  <td>{station.code ?? "-"}</td>
+                  <td>{station.city ?? "-"}</td>
+                  <td>{station.state ?? "-"}</td>
                   <td>
                     <span className={`status-pill ${isStationActive(station) ? "status-pill--live" : ""}`}>
                       <i />
@@ -391,33 +371,26 @@ function StationList({
                     </span>
                   </td>
 
-                  {!readOnly && (
-                    <>
-                      <td>{formatDate(station.created_at)}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="table-action"
+                  <td>{formatDate(station.created_at)}</td>
+                  <td>
+                        <ManagementActionButton
+                          action="edit"
+                          ariaLabel={`Edit ${station.name}`}
                           onClick={() => openEdit(station)}
                           disabled={!canUpdate}
-                          data-tooltip={canUpdate ? undefined : noAccess("edit stations")}
-                          data-tooltip-kind="access"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="table-action"
+                          tooltip={!canUpdate ? noAccess("edit stations") : undefined}
+                          tooltipKind={!canUpdate ? "access" : undefined}
+                        />
+                        <ManagementActionButton
+                          action={isStationActive(station) ? "deactivate" : "activate"}
+                          stateIndicator={isStationActive(station) ? "active" : "blocked"}
+                          ariaLabel={`${isStationActive(station) ? "Deactivate" : "Activate"} ${station.name}`}
                           onClick={() => toggleStatus(station)}
                           disabled={!canUpdate || togglingId === station.id}
-                          data-tooltip={canUpdate ? undefined : noAccess("change station status")}
-                          data-tooltip-kind="access"
-                        >
-                          {togglingId === station.id ? "Saving…" : isStationActive(station) ? "Deactivate" : "Activate"}
-                        </button>
-                      </td>
-                    </>
-                  )}
+                          tooltip={!canUpdate ? noAccess("change station status") : togglingId === station.id ? "Please wait, the station is being updated" : undefined}
+                          tooltipKind={!canUpdate ? "access" : undefined}
+                        />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -425,11 +398,13 @@ function StationList({
 
           {!matching.length && (
             <div className="api-state">
-              {inView.length ? `No stations match "${search.trim()}".` : emptyText}
+              {inView.length ? `No stations match "${search.trim()}".` : "No stations in this status."}
             </div>
           )}
         </div>
       )}
+
+      {!isLoading && !isError && matching.length > 0 && <ListPagination page={page} count={totalPages} onChange={setPage} disabled={isFetching} />}
 
       <SidePanel
         open={panelOpen}
@@ -441,25 +416,27 @@ function StationList({
       >
         <div className="form-grid">
           <label>
-            <span>Station name *</span>
+            <span>Station name<RequiredFieldMark /></span>
             <input
               value={values.name}
               onChange={(event) => setField("name", event.target.value)}
               placeholder="e.g. Secunderabad Junction"
               maxLength={NAME_MAX}
               disabled={saving}
+              required
             />
             {showErrors && errors.name && <small className="field-error" role="alert">{errors.name}</small>}
           </label>
 
           <label>
-            <span>Station code *</span>
+            <span>Station code<RequiredFieldMark /></span>
             <input
               value={values.code}
               onChange={(event) => setField("code", event.target.value)}
               placeholder="e.g. SC"
               maxLength={CODE_MAX}
               disabled={saving}
+              required
             />
             {showErrors && errors.code ? (
               <small className="field-error" role="alert">{errors.code}</small>
@@ -469,25 +446,27 @@ function StationList({
           </label>
 
           <label>
-            <span>City *</span>
+            <span>City<RequiredFieldMark /></span>
             <input
               value={values.city}
               onChange={(event) => setField("city", event.target.value)}
               placeholder="e.g. Hyderabad"
               maxLength={PLACE_MAX}
               disabled={saving}
+              required
             />
             {showErrors && errors.city && <small className="field-error" role="alert">{errors.city}</small>}
           </label>
 
           <label>
-            <span>State *</span>
+            <span>State<RequiredFieldMark /></span>
             <input
               value={values.state}
               onChange={(event) => setField("state", event.target.value)}
               placeholder="e.g. Telangana"
               maxLength={PLACE_MAX}
               disabled={saving}
+              required
             />
             {showErrors && errors.state && <small className="field-error" role="alert">{errors.state}</small>}
           </label>
@@ -528,15 +507,21 @@ function StationList({
             Cancel
           </button>
 
-          <button
+          {editing ? <SoftGreenButton
             type="button"
-            className="primary-button"
             onClick={submit}
             disabled={Boolean(saveBlocked)}
             data-tooltip={saveBlocked}
           >
-            {saving ? "Saving…" : editing ? "Save changes" : "Add station"}
-          </button>
+            {saving ? "Saving\u2026" : "Save changes"}
+          </SoftGreenButton> : <PrimaryActionButton
+            type="button"
+            onClick={submit}
+            disabled={Boolean(saveBlocked)}
+            data-tooltip={saveBlocked}
+          >
+            {saving ? "Saving\u2026" : "Add station"}
+          </PrimaryActionButton>}
         </div>
       </SidePanel>
     </section>
@@ -560,7 +545,7 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
-const rupees = (value: number) => `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+const rupees = (value: number) => `\u20B9${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 /** Performance of one station: pick a station, see its orders and how they are going. */
 function StationPerformance({ query }: { query: StationsQuery }) {
@@ -621,7 +606,7 @@ function StationPerformance({ query }: { query: StationsQuery }) {
   }, [station, ordersQuery.data]);
 
   const loadingOrders = ordersQuery.isLoading;
-  const show = (value: string) => (loadingOrders || ordersQuery.isError ? "—" : value);
+  const show = (value: string) => (loadingOrders || ordersQuery.isError ? "-" : value);
 
   const stats = figures
     ? [
@@ -629,32 +614,25 @@ function StationPerformance({ query }: { query: StationsQuery }) {
         { id: "progress", label: "In progress", note: "Placed up to out for delivery", value: show(String(figures.inProgress)) },
         { id: "cancelled", label: "Cancelled", note: `${figures.cancelRate}% of orders`, value: show(String(figures.cancelled)) },
         { id: "revenue", label: "Revenue", note: "From delivered orders", value: show(rupees(figures.revenue)) },
-        { id: "average", label: "Avg. order value", note: "Per delivered order", value: show(figures.delivered ? rupees(figures.average) : "—") },
+        { id: "average", label: "Avg. order value", note: "Per delivered order", value: show(figures.delivered ? rupees(figures.average) : "-") },
       ]
     : [];
 
   return (
     <section className="user-management-workspace">
-      <header className="user-activity-header">
-        <div>
-          <span className="eyebrow">STATION PERFORMANCE</span>
-          <h2>Station performance</h2>
-          <p>Choose a station to see how its orders are going.</p>
-        </div>
-
-        <RefreshButton
-          refreshing={isFetching || ordersQuery.isFetching}
-          label="the station figures"
-          onRefresh={() => {
-            refetch();
-            ordersQuery.refetch();
-          }}
-        />
-      </header>
-
       {isError && (
-        <div className="api-state api-state--error">
-          Unable to load stations. Check the API connection and try again.
+        <div className="station-perf-error-row">
+          <div className="api-state api-state--error">
+            Unable to load stations. Check the API connection and try again.
+          </div>
+          <RefreshButton
+            refreshing={isFetching || ordersQuery.isFetching}
+            label="the station figures"
+            onRefresh={() => {
+              refetch();
+              ordersQuery.refetch();
+            }}
+          />
         </div>
       )}
 
@@ -667,13 +645,13 @@ function StationPerformance({ query }: { query: StationsQuery }) {
               onChange={(event) => setSelectedId(event.target.value)}
               disabled={isLoading || !sorted.length}
             >
-              {isLoading && <option>Loading stations…</option>}
+              {isLoading && <option>Loading stations\u2026</option>}
               {!isLoading && !sorted.length && <option>No stations yet</option>}
               {sorted.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                   {item.code ? ` (${item.code})` : ""}
-                  {item.city ? ` — ${item.city}` : ""}
+                  {item.city ? ` \u2014 ${item.city}` : ""}
                 </option>
               ))}
             </select>
@@ -684,13 +662,19 @@ function StationPerformance({ query }: { query: StationsQuery }) {
               <span>
                 {[station.city, station.state].filter(Boolean).join(", ") || "Location not set"}
               </span>
-              <span className={`status-pill ${isStationActive(station) ? "status-pill--live" : ""}`}>
-                <i />
-                {isStationActive(station) ? "Active" : "Inactive"}
-              </span>
+              <ManagementStatus status={isStationActive(station) ? "Active" : "Inactive"} />
               <span>Added {formatDate(station.created_at)}</span>
             </div>
           )}
+
+          <RefreshButton
+            refreshing={isFetching || ordersQuery.isFetching}
+            label="the station figures"
+            onRefresh={() => {
+              refetch();
+              ordersQuery.refetch();
+            }}
+          />
         </div>
       )}
 
@@ -727,7 +711,7 @@ function StationPerformance({ query }: { query: StationsQuery }) {
 
           {figures && !loadingOrders && !ordersQuery.isError && (
             <div className="station-perf-panels">
-              <div className="user-table-wrap">
+              <section className="station-perf-panel">
                 <h3 className="station-perf-heading">Orders by status</h3>
                 {figures.statuses.length ? (
                   <ul className="station-perf-bars">
@@ -742,37 +726,39 @@ function StationPerformance({ query }: { query: StationsQuery }) {
                     ))}
                   </ul>
                 ) : (
-                  <div className="api-state">No orders for this station yet.</div>
+                  <div className="api-state station-perf-empty">No orders for this station yet.</div>
                 )}
-              </div>
+              </section>
 
-              <div className="user-table-wrap">
+              <section className="station-perf-panel station-perf-panel--orders">
                 <h3 className="station-perf-heading">Recent orders</h3>
                 {figures.recent.length ? (
-                  <table className="user-table">
-                    <thead>
-                      <tr>
-                        <th>Order</th>
-                        <th>Status</th>
-                        <th>Total</th>
-                        <th>Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {figures.recent.map((order) => (
-                        <tr key={order.id}>
-                          <td>{order.order_number ?? order.id.slice(0, 8)}</td>
-                          <td>{order.status_label ?? STATUS_LABELS[String(order.status).toUpperCase()] ?? order.status ?? "—"}</td>
-                          <td>{order.total == null ? "—" : rupees(Number(order.total) || 0)}</td>
-                          <td>{formatDate(order.journey_date ?? order.created_at)}</td>
+                  <div className="station-perf-table-wrap">
+                    <table className="user-table station-perf-orders-table">
+                      <thead>
+                        <tr>
+                          <th>Order</th>
+                          <th>Status</th>
+                          <th>Total</th>
+                          <th>Date</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {figures.recent.map((order) => (
+                          <tr key={order.id}>
+                            <td>{order.order_number ?? order.id.slice(0, 8)}</td>
+                            <td>{formatStatusLabel(order.status_label ?? STATUS_LABELS[String(order.status).toUpperCase()] ?? order.status)}</td>
+                            <td>{order.total == null ? "-" : rupees(Number(order.total) || 0)}</td>
+                            <td>{formatDate(order.journey_date ?? order.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <div className="api-state">No orders for this station yet.</div>
+                  <div className="api-state station-perf-empty">No orders for this station yet.</div>
                 )}
-              </div>
+              </section>
             </div>
           )}
 

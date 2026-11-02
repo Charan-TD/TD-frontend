@@ -1,4 +1,5 @@
 import { baseApi } from "../../admin/api/baseApi";
+import { restaurantIdFromRequest } from "./restaurantId";
 
 export type ProfileEditStatus = "pending" | "approved" | "rejected";
 
@@ -27,7 +28,7 @@ function normalize(raw: Raw): ProfileEditRequest {
   const status = String(raw.status ?? "pending").toLowerCase();
   return {
     id: String(raw.id ?? raw.request_id ?? ""),
-    restaurantId: String(raw.restaurant_id ?? ""),
+    restaurantId: restaurantIdFromRequest(raw),
     status: status === "approved" || status === "rejected" ? status : "pending",
     requestedChanges: asObject(raw.requested_changes),
     previousValues: asObject(raw.previous_values),

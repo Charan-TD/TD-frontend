@@ -2,9 +2,14 @@
 
 import { useState } from "react";
 import { Icon } from "../../admin/components/Icon";
+import { RequiredFieldMark } from "../../admin/components/RequiredFieldMark";
 import { UserAvatar } from "../../admin/components/UserAvatar";
 import { SidePanel } from "../../admin/components/SidePanel";
 import { ConfirmDialog } from "../../admin/components/ConfirmDialog";
+import { ManagementActionButton } from "../../admin/components/ManagementActionButton";
+import { TransientSuccessMessage } from "../../admin/components/TransientSuccessMessage";
+import { PrimaryActionButton } from "../../admin/components/PrimaryActionButton";
+import { SectionActions } from "../../admin/components/SectionActions";
 import { can, type PermissionMap } from "../../admin/models/access";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { Skeleton } from "../../admin/components/Skeleton";
@@ -132,14 +137,14 @@ export function EmployeeDetailsView({
       </button>
       <header className="employee-profile-header">
         <div>
-          <UserAvatar name={employee.name} size="large" />
+          <UserAvatar name={employee.name} imageUrl={employee.profileImgUrl} size="large" />
           <div>
             <span className="eyebrow">ACCOUNT OVERVIEW</span>
             <h2>{employee.name}</h2>
             <p>{employee.email}</p>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <SectionActions>
           <button
             className="primary-button"
             type="button"
@@ -153,10 +158,10 @@ export function EmployeeDetailsView({
           <button className="secondary-button" type="button" onClick={onAssignRole}>
             Roles &amp; access
           </button>
-        </div>
+        </SectionActions>
       </header>
 
-      {vm.savedMessage && <div className="success-banner">{vm.savedMessage}</div>}
+      <TransientSuccessMessage message={vm.savedMessage} />
       {vm.errorMessage && <div className="api-state api-state--error">{vm.errorMessage}</div>}
 
       <div className="employee-detail-grid">
@@ -191,17 +196,14 @@ export function EmployeeDetailsView({
                 <span className="role-removed-pill">Removed</span>
               </div>
               <div style={{ display: "flex", gap: 4 }}>
-                <button
-                  className="table-action"
-                  type="button"
+                <ManagementActionButton
+                  action="restore"
+                  ariaLabel={`Restore ${role.name}`}
                   onClick={() => vm.restoreRole(role.assignmentId)}
                   disabled={!canRestoreRole || vm.isRestoringRole}
-                  data-tooltip={!canRestoreRole ? noAccess("give removed roles back") : vm.isRestoringRole ? "Please wait, the role is being restored" : "Give this role back to the employee"}
-                  data-tooltip-kind={canRestoreRole ? undefined : "access"}
-                  data-tooltip-icon={canRestoreRole ? "check" : undefined}
-                >
-                  {vm.isRestoringRole ? "Restoring..." : "Restore"}
-                </button>
+                  tooltip={!canRestoreRole ? noAccess("give removed roles back") : vm.isRestoringRole ? "Please wait, the role is being restored" : undefined}
+                  tooltipKind={canRestoreRole ? undefined : "access"}
+                />
               </div>
             </div>
           ) : (
@@ -210,26 +212,22 @@ export function EmployeeDetailsView({
                 <strong>{role.name}</strong>
               </div>
               <div style={{ display: "flex", gap: 4 }}>
-                <button
-                  className="table-action"
-                  type="button"
+                <ManagementActionButton
+                  action="edit"
+                  ariaLabel={`Edit ${role.name}`}
                   onClick={() => openEditRole(role.id)}
                   disabled={!canUpdateRole}
-                  data-tooltip={canUpdateRole ? undefined : noAccess("edit roles")}
-                  data-tooltip-kind="access"
-                >
-                  Edit role
-                </button>
-                <button
-                  className="table-action table-action--danger"
-                  type="button"
+                  tooltip={!canUpdateRole ? noAccess("edit roles") : undefined}
+                  tooltipKind={!canUpdateRole ? "access" : undefined}
+                />
+                <ManagementActionButton
+                  action="remove"
+                  ariaLabel={`Remove ${role.name}`}
                   onClick={() => setRoleToRemove(role)}
                   disabled={!canRemoveRole || vm.isRemovingRole}
-                  data-tooltip={!canRemoveRole ? noAccess("remove roles from employees") : vm.isRemovingRole ? "Please wait, a role is being removed" : undefined}
-                  data-tooltip-kind={canRemoveRole ? undefined : "access"}
-                >
-                  Remove
-                </button>
+                  tooltip={!canRemoveRole ? noAccess("remove roles from employees") : vm.isRemovingRole ? "Please wait, a role is being removed" : undefined}
+                  tooltipKind={!canRemoveRole ? "access" : undefined}
+                />
               </div>
             </div>
           ))}
@@ -250,8 +248,7 @@ export function EmployeeDetailsView({
                 placeholder="Select role"
               />
             </label>
-            <button
-              className="secondary-button"
+            <PrimaryActionButton
               type="button"
               disabled={!canAssignRole || !newRoleName || vm.isAssigningRole}
               data-tooltip={!canAssignRole ? noAccess("add roles to employees") : vm.isAssigningRole ? "Please wait, the role is being added" : !newRoleName ? "Select a role to add first" : undefined}
@@ -262,7 +259,7 @@ export function EmployeeDetailsView({
               }}
             >
               {vm.isAssigningRole ? "Adding..." : "Add role"}
-            </button>
+            </PrimaryActionButton>
           </div>
         )}
       </div>
@@ -280,16 +277,17 @@ export function EmployeeDetailsView({
       >
         <div className="form-grid">
           <label>
-            <span>Name</span>
-            <input value={name} onChange={(event) => setName(event.target.value)} disabled={vm.isUpdatingEmployee} />
+            <span>Name<RequiredFieldMark /></span>
+            <input value={name} onChange={(event) => setName(event.target.value)} disabled={vm.isUpdatingEmployee} required />
           </label>
           <label>
-            <span>Email</span>
+            <span>Email<RequiredFieldMark /></span>
             <input
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               disabled={vm.isUpdatingEmployee}
+              required
             />
           </label>
         </div>
@@ -331,8 +329,8 @@ export function EmployeeDetailsView({
       >
         <div className="form-grid">
           <label>
-            <span>Role name</span>
-            <input value={roleName} onChange={(event) => setRoleName(event.target.value)} disabled={vm.isUpdatingRole} />
+            <span>Role name<RequiredFieldMark /></span>
+            <input value={roleName} onChange={(event) => setRoleName(event.target.value)} disabled={vm.isUpdatingRole} required />
           </label>
           <label>
             <span>Description</span>

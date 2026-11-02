@@ -12,6 +12,7 @@ import type { CustomerUser } from "../models/customerUser";
 export type UserWorkspace =
   | "all"
   | "blocked"
+  | "active"
   | "complaints"
   | "activity";
 
@@ -31,8 +32,7 @@ export function useUsersViewModel(
   const [selectedUser, setSelectedUser] =
     useState<CustomerUser | null>(null);
 
-  const status =
-    workspace === "blocked" ? "blocked" : "all";
+  const status = workspace === "blocked" || workspace === "active" ? workspace : "all";
 
   const query = useGetUsersQuery({
     search,
@@ -41,23 +41,34 @@ export function useUsersViewModel(
     status,
   });
 
+  const allCountQuery = useGetUsersQuery({ page: 1, limit: 1, status: "all" });
+  const activeCountQuery = useGetUsersQuery({ page: 1, limit: 1, status: "active" });
+  const blockedCountQuery = useGetUsersQuery({ page: 1, limit: 1, status: "blocked" });
+
   const [updateStatus, updateState] =
     useUpdateUserStatusMutation();
 
+  const userCounts = {
+    all: allCountQuery.currentData?.pagination.total ?? 0,
+    active: activeCountQuery.currentData?.pagination.total ?? 0,
+    blocked: blockedCountQuery.currentData?.pagination.total ?? 0,
+  };
+
   const users = useMemo(() => {
-    const allUsers = query.data?.users ?? [];
+    const allUsers = query.currentData?.users ?? [];
     const needle = search.trim().toLowerCase();
     if (!needle) return allUsers;
 
     return allUsers.filter((user) =>
-      [user.full_name, user.email, user.phone]
+      [user.full_name, user.email, user.phone, user.customer_id, user.id]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle))
     );
-  }, [query.data, search]);
+  }, [query.currentData, search]);
 
-  const hasNextPage = query.data?.hasMore ?? false;
+  const hasNextPage = query.currentData?.hasMore ?? false;
   const hasPreviousPage = page > 1;
+  const totalPages = Math.max(1, Math.ceil((search.trim() ? query.currentData?.pagination.total ?? 0 : userCounts[status === "all" ? "all" : status] ?? 0) / PAGE_SIZE));
 
   const onSearch = (value: string) => {
     setSearch(value);
@@ -77,9 +88,11 @@ export function useUsersViewModel(
   };
 
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const toggleBlock = async (user: CustomerUser) => {
     setErrorMessage("");
+    setSuccessMessage("");
 
     // Backend customer statuses are ACTIVE / INACTIVE ("blocked" = INACTIVE).
     const nextStatus = isUserBlocked(user) ? "active" : "inactive";
@@ -89,6 +102,9 @@ export function useUsersViewModel(
         id: user.id,
         status: nextStatus,
       }).unwrap();
+
+      const action = nextStatus === "inactive" ? "blocked" : "unblocked";
+      setSuccessMessage(`${user.full_name || "User"} was ${action} successfully.`);
 
       setSelectedUser((current) =>
         current?.id === user.id
@@ -107,6 +123,8 @@ export function useUsersViewModel(
 
   return {
     users,
+    totalUsers: query.currentData?.pagination.total ?? 0,
+    userCounts,
 
     search,
     selectedUser,
@@ -114,17 +132,22 @@ export function useUsersViewModel(
 
     page,
     pageSize: PAGE_SIZE,
+    totalPages,
     hasNextPage,
     hasPreviousPage,
 
     onSearch,
     goToNextPage,
     goToPreviousPage,
+    setPage: (nextPage: number) => {
+      if (!query.isFetching && nextPage >= 1 && nextPage <= totalPages) setPage(nextPage);
+    },
 
     toggleBlock,
     errorMessage,
+    successMessage,
 
-    isLoading: query.isLoading,
+    isLoading: query.isLoading || (query.isFetching && !query.currentData),
     isFetching: query.isFetching,
     isError: query.isError,
     isUpdating: updateState.isLoading,

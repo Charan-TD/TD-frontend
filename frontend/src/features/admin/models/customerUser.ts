@@ -2,6 +2,7 @@ export type UserType = "customer" | "restaurant" | "delivery_partner";
 
 export type CustomerUser = {
   id: string;
+  customer_id?: string;
   phone: string | null;
   email: string | null;
   full_name: string | null;

@@ -57,7 +57,7 @@ export const PORTAL_SECTIONS: Array<{
     },
     {
       id: "sales",
-      label: "Sales",
+      label: "Transactions",
       description:
         "View sales and payment operations",
     },

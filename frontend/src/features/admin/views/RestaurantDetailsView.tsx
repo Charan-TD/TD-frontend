@@ -1,9 +1,11 @@
 "use client";
 
+import { UserAvatar } from "../components/UserAvatar";
 import { useState } from "react";
 import { useGetRestaurantReviewQuery } from "../../restaurants/api/registrationRequestsApi";
 import { ReviewDetails } from "./RegistrationApprovalsPanel";
 import { RestaurantMenuPanel } from "./RestaurantMenuPanel";
+import { SectionActions } from "../components/SectionActions";
 
 type Tab = "details" | "menu";
 
@@ -29,11 +31,11 @@ export function RestaurantDetailsView({
     <section className="user-management-workspace">
       <header className="user-activity-header">
         <div>
-          <button type="button" className="back-link" onClick={onBack}>
+          <SectionActions><button type="button" className="back-link" onClick={onBack}>
             ← All restaurants
-          </button>
+          </button></SectionActions>
           <span className="eyebrow">RESTAURANT</span>
-          <h2>{restaurant?.name ?? restaurantName}</h2>
+          <div className="restaurant-details-title"><UserAvatar name={restaurant?.name ?? restaurantName} imageUrl={typeof restaurant?.logo_url === "string" ? restaurant.logo_url : typeof restaurant?.logo === "string" ? restaurant.logo : null} size="large" /><h2>{restaurant?.name ?? restaurantName}</h2></div>
           <p>
             {typeof restaurant?.restaurant_type === "string" ? restaurant.restaurant_type : "Restaurant"} ·{" "}
             {online ? (online === "OPEN" ? "Open now" : "Closed now") : "Hours not set"}

@@ -1,7 +1,9 @@
 "use client";
 
+import { UserAvatar } from "../components/UserAvatar";
 import { useMemo, useState } from "react";
 import { RefreshButton } from "../components/RefreshButton";
+import { ManagementActionButton } from "../components/ManagementActionButton";
 import { SkeletonTable } from "../components/Skeleton";
 import {
   useGetRestaurantMenuItemsQuery,
@@ -35,10 +37,10 @@ const isActive = (item: MenuItem) => item.adminAvailable !== false;
 const isInactive = (item: MenuItem) => item.adminAvailable === false;
 
 const rupees = (value: number | null) =>
-  value == null ? "—" : `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  value == null ? "-" : `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 function FoodType({ value }: { value: string | null }) {
-  if (!value) return <span className="menu-muted">—</span>;
+  if (!value) return <span className="menu-muted">-</span>;
   return (
     <span className={`food-type food-type--${value}`}>
       <i aria-hidden="true" />
@@ -185,14 +187,7 @@ export function RestaurantMenuPanel({ restaurantId, restaurantName }: { restaura
             return (
               <li key={item.id} className={`menu-row${isInactive(item) ? " menu-row--inactive" : ""}`}>
                 <div className="menu-row__item">
-                  {item.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.imageUrl} alt="" loading="lazy" />
-                  ) : (
-                    <span className="menu-row__noimg" aria-hidden="true">
-                      🍽
-                    </span>
-                  )}
+                  <UserAvatar name={item.name} imageUrl={item.imageUrl} size="medium" />
                   <div>
                     <strong>{item.name}</strong>
                     {item.description && <p>{item.description}</p>}
@@ -206,7 +201,7 @@ export function RestaurantMenuPanel({ restaurantId, restaurantName }: { restaura
                       {item.subCategory && <span>{item.subCategory}</span>}
                     </span>
                   ) : (
-                    <span className="menu-muted">—</span>
+                    <span className="menu-muted">-</span>
                   )}
                 </Field>
 
@@ -215,7 +210,7 @@ export function RestaurantMenuPanel({ restaurantId, restaurantName }: { restaura
                 </Field>
 
                 <Field label="Prep time">
-                  {item.prepMinutes != null ? `${item.prepMinutes} min` : <span className="menu-muted">—</span>}
+                  {item.prepMinutes != null ? `${item.prepMinutes} min` : <span className="menu-muted">-</span>}
                 </Field>
 
                 <Field label="Price">
@@ -244,28 +239,28 @@ export function RestaurantMenuPanel({ restaurantId, restaurantName }: { restaura
 
                 <div className="menu-row__actions">
                   {!active && (
-                    <button
-                      type="button"
-                      className="secondary-button menu-action menu-action--activate"
+                    <ManagementActionButton
+                      action="activate"
+                      stateIndicator="blocked"
+                      ariaLabel={`Activate ${item.name}`}
                       disabled={busy}
+                      tooltip={busy ? "Please wait, the item is being activated" : undefined}
                       onClick={() => apply(item, true)}
-                    >
-                      {busy ? "Activating…" : "Activate"}
-                    </button>
+                    />
                   )}
                   {active && (
-                    <button
-                      type="button"
-                      className="secondary-button menu-action menu-action--deactivate"
+                    <ManagementActionButton
+                      action="deactivate"
+                      stateIndicator="active"
+                      ariaLabel={`Deactivate ${item.name}`}
                       disabled={busy}
+                      tooltip={busy ? "Please wait, the item is being deactivated" : undefined}
                       onClick={() => {
                         setActionError(null);
                         setReason("");
                         setDeactivating(item);
                       }}
-                    >
-                      Deactivate
-                    </button>
+                    />
                   )}
                 </div>
               </li>

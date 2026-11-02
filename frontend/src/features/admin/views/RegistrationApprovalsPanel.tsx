@@ -1,11 +1,16 @@
 "use client";
 
+import { Icon } from "../components/Icon";
+import { UserAvatar } from "../components/UserAvatar";
 import { useState, type ReactNode } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SoftGreenButton } from "../components/SoftGreenButton";
 import { LocationMap } from "../components/LocationMap";
 import { RefreshButton } from "../components/RefreshButton";
+import { ManagementActionButton } from "../components/ManagementActionButton";
 import { ReviewModal } from "../components/ReviewModal";
 import { SkeletonTable } from "../components/Skeleton";
+import { formatStatusLabel } from "../models/formatStatusLabel";
 import {
   useDecideRegistrationMutation,
   useGetRegistrationRequestsQuery,
@@ -14,7 +19,7 @@ import {
   type RegistrationStatus,
 } from "../../restaurants/api/registrationRequestsApi";
 import { cuisineNames, useGetCuisinesQuery } from "../../restaurants/api/cuisinesApi";
-import { STATUS_FILTERS, errorMessage, formatDate, str } from "./approvalShared";
+import { STATUS_FILTERS, errorMessage, formatDate, ridersOwnerLabel, str } from "./approvalShared";
 
 const PHOTOS: { key: string; label: string }[] = [
   { key: "logo_url", label: "Logo" },
@@ -56,7 +61,7 @@ type DayHours = {
 /** "15:30" -> "3:30 PM" */
 function clock(time: string | undefined): string {
   const match = /^(\d{1,2}):(\d{2})/.exec(time ?? "");
-  if (!match) return time ?? "—";
+  if (!match) return time ?? "-";
   const hour = Number(match[1]);
   return `${hour % 12 || 12}:${match[2]} ${hour >= 12 ? "PM" : "AM"}`;
 }
@@ -66,7 +71,7 @@ function clock(time: string | undefined): string {
  * Shown Monday to Sunday; a day can have several slots (e.g. a lunch break).
  */
 function hoursRows(value: unknown): [string, ReactNode][] {
-  if (!value || typeof value !== "object") return [["Hours", "—"]];
+  if (!value || typeof value !== "object") return [["Hours", "-"]];
   const hours = value as Record<string, DayHours | null>;
   const rows = WEEK.filter((day) => hours[day.key]).map((day): [string, ReactNode] => {
     const entry = hours[day.key] as DayHours;
@@ -78,7 +83,7 @@ function hoursRows(value: unknown): [string, ReactNode][] {
       slots.map((slot) => `${clock(slot.opening_time)} – ${clock(slot.closing_time)}`).join(", "),
     ];
   });
-  return rows.length ? rows : [["Hours", "—"]];
+  return rows.length ? rows : [["Hours", "-"]];
 }
 
 export function ReviewDetails({ restaurantId }: { restaurantId: string }) {
@@ -123,10 +128,11 @@ export function ReviewDetails({ restaurantId }: { restaurantId: string }) {
         title="Restaurant"
         rows={[
           ["Type", str(r.restaurant_type)],
+          ["Delivery riders", ridersOwnerLabel(r.riders_owner)],
           ["Cuisines", str(cuisineNames(r.cuisines, cuisines))],
           ["Food served", str(r.food_served)],
           ["Restaurant contact", str(r.restaurant_contact)],
-          ["Address", address || "—"],
+          ["Address", address || "-"],
         ]}
       />
       <Card
@@ -299,6 +305,7 @@ export function RegistrationApprovalsPanel() {
                 <th>Restaurant</th>
                 <th>Owner</th>
                 <th>Type</th>
+                <th>Riders</th>
                 <th>Submitted</th>
                 <th>Status</th>
                 <th />
@@ -307,27 +314,26 @@ export function RegistrationApprovalsPanel() {
             <tbody>
               {requests.map((request) => (
                 <tr key={request.requestId}>
-                  <td>{request.restaurantName}</td>
-                  <td>{request.ownerName ?? "—"}</td>
-                  <td>{request.restaurantType ?? "—"}</td>
+                  <td><div className="user-cell"><UserAvatar name={request.restaurantName} imageUrl={request.logoUrl} size="medium" /><span>{request.restaurantName}</span></div></td>
+                  <td>{request.ownerName ?? "-"}</td>
+                  <td>{request.restaurantType ?? "-"}</td>
+                  <td>{ridersOwnerLabel(request.ridersOwner)}</td>
                   <td>{formatDate(request.createdAt)}</td>
                   <td>
-                    <span className={`status-pill${request.status === "approved" ? " status-pill--live" : ""}`}>
+                    <span className={`status-pill${String(request.status).toLowerCase() === "approved" ? " status-pill--live" : ""}`}>
                       <i />
-                      {request.status}
+                      {formatStatusLabel(request.status)}
                     </span>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className="table-action"
+                    <ManagementActionButton
+                      action="review"
+                      ariaLabel={`Review ${request.restaurantName}`}
                       onClick={() => {
                         setActionError(null);
                         setSelected(request);
                       }}
-                    >
-                      Review
-                    </button>
+                    />
                   </td>
                 </tr>
               ))}
@@ -353,9 +359,9 @@ export function RegistrationApprovalsPanel() {
                   <button type="button" className="secondary-button" onClick={() => setRejecting(true)}>
                     Reject
                   </button>
-                  <button type="button" className="primary-button" onClick={() => setConfirmApprove(true)}>
+                  <SoftGreenButton onClick={() => setConfirmApprove(true)}>
                     Approve
-                  </button>
+                  </SoftGreenButton>
                 </>
               )}
             </>
@@ -363,6 +369,15 @@ export function RegistrationApprovalsPanel() {
         >
           {selected.status === "rejected" && selected.rejectionReason && (
             <div className="api-state api-state--error review-card--wide">Rejected: {selected.rejectionReason}</div>
+          )}
+          {selected.ridersOwner && (
+            <div className={`riders-banner riders-banner--${selected.ridersOwner.toLowerCase() === "traindhaba" ? "platform" : "own"} review-card--wide`}>
+              <span className="riders-banner__icon"><Icon name="rider" size={18} /></span>
+              <div>
+                <strong>{ridersOwnerLabel(selected.ridersOwner)}</strong>
+                <span>{selected.ridersOwner.toLowerCase() === "traindhaba" ? "Requested riders from Train Dhaba for this restaurant's orders." : "This restaurant will deliver its orders with its own riders."}</span>
+              </div>
+            </div>
           )}
           <ReviewDetails restaurantId={selected.restaurantId} />
         </ReviewModal>
@@ -374,11 +389,12 @@ export function RegistrationApprovalsPanel() {
         message={
           selected && (
             <>
-              <strong>{selected.restaurantName}</strong> will become active and its owner will be able to sign in.
+              <strong>{selected.restaurantName}</strong> will become active and its owner will be able to sign in.{selected.ridersOwner && <><br />Delivery: <strong>{ridersOwnerLabel(selected.ridersOwner)}</strong></>}
             </>
           )
         }
         confirmLabel="Approve"
+        confirmButtonTone="soft-green"
         busyLabel="Approving…"
         busy={deciding}
         onConfirm={onApprove}

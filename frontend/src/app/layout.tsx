@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { StoreProvider } from "./providers/StoreProvider";
+import { MuiProvider } from "./providers/MuiProvider";
 import { TooltipLayer } from "../features/admin/components/TooltipLayer";
 
 export const metadata: Metadata = {
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <StoreProvider>{children}</StoreProvider>
+        <MuiProvider>
+          <StoreProvider>{children}</StoreProvider>
+        </MuiProvider>
         <TooltipLayer />
       </body>
     </html>

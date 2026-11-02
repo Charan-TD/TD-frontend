@@ -51,6 +51,31 @@ export const stationsApi = baseApi.injectEndpoints({
           : [{ type: "Station" as const, id: "LIST" }],
     }),
 
+    getAllStations: builder.query<Station[], void>({
+      async queryFn(_arg, _api, _extraOptions, baseQuery) {
+        const all: Station[] = [];
+        const limit = 100;
+        let page = 1;
+        let totalPages: number | undefined;
+
+        while (totalPages == null || page <= totalPages) {
+          const response = await baseQuery({ url: "/stations", method: "GET", params: { page, limit } });
+          if (response.error) return { error: response.error };
+          const data = (response.data as { data?: StationList } | undefined)?.data;
+          const batch = data?.stations ?? [];
+          all.push(...batch);
+          totalPages = data?.pagination?.totalPages ?? (batch.length < limit ? page : undefined);
+          if (!batch.length) break;
+          page += 1;
+        }
+
+        return { data: all };
+      },
+      providesTags: (result) => result
+        ? [...result.map((station) => ({ type: "Station" as const, id: station.id })), { type: "Station" as const, id: "LIST" }]
+        : [{ type: "Station" as const, id: "LIST" }],
+    }),
+
     createStation: builder.mutation<Station, StationInput>({
       query: (body) => ({ url: "/stations", method: "POST", body }),
       transformResponse: (response: StationResponse) => response.data,
@@ -71,6 +96,7 @@ export const stationsApi = baseApi.injectEndpoints({
 
 export const {
   useGetStationsQuery,
+  useGetAllStationsQuery,
   useCreateStationMutation,
   useUpdateStationMutation,
 } = stationsApi;

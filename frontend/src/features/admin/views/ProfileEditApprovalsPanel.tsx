@@ -1,11 +1,15 @@
 "use client";
 
+import { UserAvatar } from "../components/UserAvatar";
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SoftGreenButton } from "../components/SoftGreenButton";
 import { LocationMap } from "../components/LocationMap";
 import { RefreshButton } from "../components/RefreshButton";
+import { ManagementActionButton } from "../components/ManagementActionButton";
 import { ReviewModal } from "../components/ReviewModal";
 import { SkeletonTable } from "../components/Skeleton";
+import { formatStatusLabel } from "../models/formatStatusLabel";
 import { useGetRestaurantsQuery } from "../../restaurants/api/restaurantsApi";
 import {
   useGetRegistrationRequestsQuery,
@@ -18,12 +22,13 @@ import {
   type ProfileEditRequest,
   type ProfileEditStatus,
 } from "../../restaurants/api/profileEditRequestsApi";
-import { STATUS_FILTERS, errorMessage, formatDate, str } from "./approvalShared";
+import { STATUS_FILTERS, errorMessage, formatDate, ridersOwnerLabel, str } from "./approvalShared";
 
 const FIELD_LABELS: Record<string, string> = {
   rest_name: "Restaurant name",
   owner_name: "Owner name",
   restaurant_type: "Type",
+  riders_owner: "Delivery riders",
   lat: "Latitude",
   lon: "Longitude",
   city: "City",
@@ -54,7 +59,8 @@ function Value({ field, value }: { field: string; value: unknown }) {
       </a>
     );
   }
-  if (DOCUMENT_FIELDS.has(field)) return <>{value ? "Uploaded file" : "—"}</>;
+  if (DOCUMENT_FIELDS.has(field)) return <>{value ? "Uploaded file" : "-"}</>;
+  if (field === "riders_owner") return <>{ridersOwnerLabel(value)}</>;
   return <>{str(value)}</>;
 }
 
@@ -75,9 +81,10 @@ function nameFromRequest(request: ProfileEditRequest): string | null {
  * The restaurants list can miss a restaurant (it is paged and filtered), so when
  * the name is not already known, load that one restaurant by its id.
  */
-function RestaurantName({ request, knownName }: { request: ProfileEditRequest; knownName: string | null }) {
+function RestaurantName({ request, knownName, logoUrl }: { request: ProfileEditRequest; knownName: string | null; logoUrl: string | null }) {
   const { data } = useGetRestaurantReviewQuery(request.restaurantId, { skip: !!knownName || !request.restaurantId });
-  return <>{knownName ?? data?.name ?? shortId(request)}</>;
+  const name = knownName ?? data?.name ?? shortId(request);
+  return <div className="user-cell"><UserAvatar name={name} imageUrl={logoUrl} size="medium" /><span>{name}</span></div>;
 }
 
 export function ProfileEditApprovalsPanel() {
@@ -121,6 +128,12 @@ export function ProfileEditApprovalsPanel() {
       }
     }
     for (const restaurant of restaurants) map.set(restaurant.id, restaurant.name);
+    return map;
+  }, [pending, approved, rejected, restaurants]);
+  const logos = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const list of [pending, approved, rejected]) for (const request of list ?? []) if (request.restaurantId && request.logoUrl) map.set(request.restaurantId, request.logoUrl);
+    for (const restaurant of restaurants) if (restaurant.logoUrl) map.set(restaurant.id, restaurant.logoUrl);
     return map;
   }, [pending, approved, rejected, restaurants]);
   const knownNameOf = (request: ProfileEditRequest) =>
@@ -259,27 +272,25 @@ export function ProfileEditApprovalsPanel() {
               {requests.map((request) => (
                 <tr key={request.id}>
                   <td>
-                    <RestaurantName request={request} knownName={knownNameOf(request)} />
+                    <RestaurantName request={request} knownName={knownNameOf(request)} logoUrl={logos.get(request.restaurantId) ?? null} />
                   </td>
                   <td>{formatDate(request.createdAt)}</td>
-                  <td>{Object.keys(request.requestedChanges).map(labelFor).join(", ") || "—"}</td>
+                  <td>{Object.keys(request.requestedChanges).map(labelFor).join(", ") || "-"}</td>
                   <td>
-                    <span className={`status-pill${request.status === "approved" ? " status-pill--live" : ""}`}>
+                    <span className={`status-pill${String(request.status).toLowerCase() === "approved" ? " status-pill--live" : ""}`}>
                       <i />
-                      {request.status}
+                      {formatStatusLabel(request.status)}
                     </span>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className="table-action"
+                    <ManagementActionButton
+                      action="review"
+                      ariaLabel={`Review ${nameOf(request)}`}
                       onClick={() => {
                         setActionError(null);
                         setSelected(request);
                       }}
-                    >
-                      Review
-                    </button>
+                    />
                   </td>
                 </tr>
               ))}
@@ -305,9 +316,9 @@ export function ProfileEditApprovalsPanel() {
                   <button type="button" className="secondary-button" onClick={() => setRejecting(true)}>
                     Reject
                   </button>
-                  <button type="button" className="primary-button" onClick={() => setConfirmApprove(true)}>
+                  <SoftGreenButton onClick={() => setConfirmApprove(true)}>
                     Approve
-                  </button>
+                  </SoftGreenButton>
                 </>
               )}
             </>
@@ -322,7 +333,7 @@ export function ProfileEditApprovalsPanel() {
               <div className="location-compare">
                 <div>
                   <p className="location-compare__title">Current location</p>
-                  <p className="location-compare__address">{currentAddress || "—"}</p>
+                  <p className="location-compare__address">{currentAddress || "-"}</p>
                   <LocationMap
                     latitude={currentCoords.lat}
                     longitude={currentCoords.lon}
@@ -332,7 +343,7 @@ export function ProfileEditApprovalsPanel() {
                 </div>
                 <div>
                   <p className="location-compare__title">Requested location</p>
-                  <p className="location-compare__address">{requestedAddress || "—"}</p>
+                  <p className="location-compare__address">{requestedAddress || "-"}</p>
                   <LocationMap
                     latitude={requestedCoords.lat}
                     longitude={requestedCoords.lon}
@@ -383,6 +394,7 @@ export function ProfileEditApprovalsPanel() {
           )
         }
         confirmLabel="Approve"
+        confirmButtonTone="soft-green"
         busyLabel="Approving…"
         busy={approving}
         onConfirm={onApprove}

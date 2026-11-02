@@ -9,6 +9,10 @@ import type { PermissionMatrix } from "../models/employee";
 import { describeActions, isLinkedResource, isPausedSection, sectionDisplayName } from "../models/permissions";
 import { SidePanel } from "../../admin/components/SidePanel";
 import { ConfirmDialog } from "../../admin/components/ConfirmDialog";
+import { TransientSuccessMessage } from "../../admin/components/TransientSuccessMessage";
+import { PrimaryActionButton } from "../../admin/components/PrimaryActionButton";
+import { SectionActions } from "../../admin/components/SectionActions";
+import { RequiredFieldMark } from "../../admin/components/RequiredFieldMark";
 
 export function AssignRoleView({
   onBack,
@@ -58,7 +62,7 @@ export function AssignRoleView({
   );
 
   return (
-    <section className="employee-workspace">
+    <section className="employee-workspace assign-role-workspace">
       <div className="assign-role-heading">
         <div>
           <span className="eyebrow">ROLE ASSIGNMENT</span>
@@ -71,21 +75,20 @@ export function AssignRoleView({
           </p>
         </div>
 
-        <button
+        <SectionActions><PrimaryActionButton
           type="button"
-          className="primary-button"
           onClick={() => setShowCreateRole(true)}
           disabled={!canCreateRole}
           data-tooltip={canCreateRole ? undefined : noAccess("create roles")}
           data-tooltip-kind="access"
         >
           Create Role
-        </button>
+        </PrimaryActionButton></SectionActions>
       </div>
 
       <div className="assign-role-form">
         <label>
-          <span>Employee</span>
+          <span>Employee<RequiredFieldMark /></span>
 
           <select
             value={vm.employeeId}
@@ -93,6 +96,7 @@ export function AssignRoleView({
               vm.onSelectEmployee(event.target.value)
             }
             disabled={vm.isSaving}
+            required
           >
             <option value="">Select employee</option>
 
@@ -108,7 +112,7 @@ export function AssignRoleView({
         </label>
 
         <label>
-          <span>Existing Role</span>
+          <span>Existing Role<RequiredFieldMark /></span>
 
           <select
             value={vm.roleName}
@@ -116,6 +120,7 @@ export function AssignRoleView({
               vm.selectRole(event.target.value)
             }
             disabled={vm.isSaving}
+            required
           >
             <option value="">Select role</option>
 
@@ -190,7 +195,7 @@ export function AssignRoleView({
       >
         <div className="assign-role-form">
           <label>
-            <span>Role Name</span>
+            <span>Role Name<RequiredFieldMark /></span>
 
             <input
               type="text"
@@ -200,6 +205,7 @@ export function AssignRoleView({
               }
               placeholder="Enter role name"
               disabled={vm.isCreatingRole}
+              required
             />
           </label>
 
@@ -237,9 +243,8 @@ export function AssignRoleView({
             Cancel
           </button>
 
-          <button
+          <PrimaryActionButton
             type="button"
-            className="primary-button"
             onClick={async () => {
               const role = await vm.createRole(
                 newRoleName,
@@ -260,7 +265,7 @@ export function AssignRoleView({
             {vm.isCreatingRole
               ? "Creating..."
               : "Create Role"}
-          </button>
+          </PrimaryActionButton>
         </div>
       </SidePanel>
 
@@ -340,11 +345,7 @@ export function AssignRoleView({
         </div>
       )}
 
-      {vm.savedMessage && (
-        <div className="api-state">
-          {vm.savedMessage}
-        </div>
-      )}
+      <TransientSuccessMessage message={vm.savedMessage} />
 
       <div className="assign-role-actions">
         {onBack && (

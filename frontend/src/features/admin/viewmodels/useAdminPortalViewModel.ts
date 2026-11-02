@@ -86,6 +86,7 @@ function buildAdminProfile(
   return {
     employeeId: session.employee.id,
     name: session.employee.name,
+    imageUrl: session.employee.profile_img_url ?? null,
     email: session.employee.email,
     phone: sameEmployee ? previous!.phone : "",
     location: sameEmployee ? previous!.location : "",

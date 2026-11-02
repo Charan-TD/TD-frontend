@@ -1,6 +1,8 @@
 "use client";
 
 import { Icon } from "../components/Icon";
+import { RequiredFieldMark } from "../components/RequiredFieldMark";
+import { TransientSuccessMessage } from "../components/TransientSuccessMessage";
 import { useForgotPasswordViewModel } from "../viewmodels/forgotPasswordViewModel";
 
 type Props = {
@@ -21,7 +23,7 @@ export function ForgotPasswordView({ initialEmail, onBackToSignIn }: Props) {
 
       {vm.sentMessage ? (
         <>
-          <div className="api-state api-state--success" role="status">{vm.sentMessage}</div>
+        <TransientSuccessMessage message={vm.sentMessage} className="api-state api-state--success" />
           <button className="primary-button primary-button--full" type="button" onClick={onBackToSignIn}>
             <span>Back to sign in</span>
             <Icon name="arrow-right" size={18} />
@@ -35,18 +37,21 @@ export function ForgotPasswordView({ initialEmail, onBackToSignIn }: Props) {
           }}
         >
           <label className="field-label">
-            Email address
+            <span>Email address<RequiredFieldMark /></span>
             <span className="input-wrap">
+              <Icon name="mail" size={20} />
               <input
                 type="email"
-                placeholder="you@company.com"
+                placeholder="Enter your email address"
+                name="email"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={vm.email}
                 onChange={(event) => vm.setEmail(event.target.value)}
                 required
                 autoComplete="email"
                 disabled={vm.isSubmitting}
               />
-              <Icon name="users" size={16} />
             </span>
           </label>
 

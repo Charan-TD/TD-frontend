@@ -1,19 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AdminProfile, PortalSection, Screen } from "../models/portal";
+import type { AdminProfile, Screen } from "../models/portal";
 import type { NavigationSectionId } from "../models/navigation";
 import { navigationGroups, navigationSections, navigationSubsections } from "../models/navigation";
 import { missingPermissions } from "../models/access";
 import { noAccess } from "../models/disabledReason";
 import { useSidebarViewModel } from "../viewmodels/sidebarViewModel";
 import { Brand } from "./Brand";
+import { SectionActionsContext } from "./SectionActions";
 import { Icon } from "./Icon";
 import { UserAvatar } from "./UserAvatar";
 import { useGetRegistrationRequestsQuery } from "../../restaurants/api/registrationRequestsApi";
 import { useGetProfileEditRequestsQuery } from "../../restaurants/api/profileEditRequestsApi";
-import { useGetRidersQuery } from "../../riders/api/ridersApi";
-import { useGetEmployeesQuery } from "../../employees/api/adminUsersApi";
 
 type Props = {
   title: string; subtitle: string; screen: Screen; admin: AdminProfile; noticeOpen: boolean;
@@ -24,7 +23,7 @@ type Props = {
 };
 
 /**
- * A topbar quick-action button. It is ALWAYS rendered so every employee sees
+ * A dashboard quick-action button. Every employee sees
  * the same shortcuts; what changes is whether it is usable:
  *  - allowed  -> normal button, runs the action
  *  - blocked  -> greyed out, the cursor becomes the "not allowed" symbol, the
@@ -48,7 +47,7 @@ function QuickAction({ label, task, icon, missing, enabledTitle, attention = fal
       data-tooltip-icon={blocked ? undefined : icon}
       onClick={() => { if (!blocked) onRun(); }}
     >
-      {!blocked && attention && <span className="topbar-action-blink" aria-hidden="true" />}
+      {attention && <span className="topbar-action-blink" aria-hidden="true" />}
       <Icon name={icon} size={14} /><span>{label}</span>
     </button>
   );
@@ -57,19 +56,55 @@ function QuickAction({ label, task, icon, missing, enabledTitle, attention = fal
 const screenToSection: Partial<Record<Screen, NavigationSectionId>> = { dashboard: "dashboard", management: "users", employees: "employees", "employee-details": "employees", "assign-role": "employees", "employee-activity": "employees" };
 const screenToEmployeeSubsection: Partial<Record<Screen, string>> = { employees: "employees-all", "employee-details": "employees-all", "assign-role": "employees-roles", "employee-activity": "employees-activity" };
 
+const managementPageCopy: Record<string, { title: string; subtitle: string }> = {
+  "users-all": { title: "Customer Accounts & Access", subtitle: "Manage registered customers and review their account status." },
+  "users-complaints": { title: "Customer Complaints & Resolution", subtitle: "Review and track issues reported by customers." },
+  "users-activity": { title: "Customer Activity & Engagement", subtitle: "View customer engagement and activity across the platform." },
+  "restaurants-all": { title: "Restaurant Partners & Operations", subtitle: "Manage restaurant profiles, availability, and account status." },
+  "restaurants-performance": { title: "Restaurant Performance & Service", subtitle: "Monitor restaurant service and performance information." },
+  "restaurants-approvals": { title: "Restaurant Applications & Approvals", subtitle: "Review restaurant applications and profile changes." },
+  "restaurants-complaints": { title: "Restaurant Complaints & Resolution", subtitle: "Review and track issues reported about restaurants." },
+  "riders-all": { title: "Delivery Team Management", subtitle: "Manage riders, station handlers, and their assignments." },
+  "riders-handlers": { title: "Delivery Team Management", subtitle: "Manage riders, station handlers, and their assignments." },
+  "riders-approvals": { title: "Rider Applications & Verification", subtitle: "Review rider applications and verification details." },
+  "riders-blocked": { title: "Rider Access & Restrictions", subtitle: "Review rider accounts that are unavailable for deliveries." },
+  "riders-complaints": { title: "Delivery Complaints & Resolution", subtitle: "Review and track issues reported about riders." },
+  "orders-all": { title: "Order Management & Tracking", subtitle: "Review orders across stations, restaurants, and trains." },
+  "orders-active": { title: "Active Orders & Delivery Tracking", subtitle: "Track orders currently moving through the delivery process." },
+  "orders-delivered": { title: "Delivered Orders", subtitle: "Review orders that have been delivered." },
+  "orders-cancelled": { title: "Order Cancellations & Review", subtitle: "Review orders that were cancelled." },
+  "grouporders-all": { title: "Group Order Management", subtitle: "Review customer requests and manage restaurant assignments." },
+  "stations-all": { title: "Station Network & Operations", subtitle: "Manage station records and their active status." },
+  "stations-performance": { title: "Station Performance & Deliveries", subtitle: "Track order activity and delivery progress by station." },
+  "sales-all": { title: "Payments & Transactions", subtitle: "View and manage all payments, settlements and transactions across the platform." },
+  "sales-payouts": { title: "Payments & Transactions", subtitle: "View and manage all payments, settlements and transactions across the platform." },
+  "sales-settlements": { title: "Payments & Transactions", subtitle: "View and manage all payments, settlements and transactions across the platform." },
+  "sales-refunds": { title: "Payments & Transactions", subtitle: "View and manage all payments, settlements and transactions across the platform." },
+  "marketing-offers": { title: "Promotional Offers & Discounts", subtitle: "Create and manage promotional offers for customers." },
+  "marketing-coupons": { title: "Coupon Codes & Promotions", subtitle: "Create and manage customer discount codes." },
+  "marketing-campaigns": { title: "Marketing Campaigns & Outreach", subtitle: "Manage promotional campaigns across the platform." },
+  "marketing-analytics": { title: "Marketing Performance & Analytics", subtitle: "Review campaign and promotion performance." },
+  "reports-sales": { title: "Sales & Revenue Reports", subtitle: "Review sales and revenue reporting." },
+  "reports-orders": { title: "Order Trends & Fulfillment Reports", subtitle: "Review order volume and fulfillment reporting." },
+  "reports-users": { title: "Customer Growth & Activity Reports", subtitle: "Review customer account and activity reporting." },
+  "reports-operations": { title: "Platform Operations & Reports", subtitle: "Review activity across the platform’s operational sections." },
+};
+
 export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedManagementId, managementOpen, selectedSubsection, onNavigate, onSelectManagement, onToggleManagement, onToggleNotice, onQuickAddEmployee, children }: Props) {
+  const [sectionActionsHost, setSectionActionsHost] = useState<HTMLDivElement | null>(null);
   const sidebarVm = useSidebarViewModel(screenToSection[screen] ?? "dashboard");
-  const allowed = new Set<PortalSection>(admin.access);
+  const allowed = new Set<NavigationSectionId>(admin.access);
+  // Group orders use the existing Orders API permissions, with their own navigation.
+  if (allowed.has("orders")) allowed.add("grouporders");
   const sections = navigationSections.filter((item) => allowed.has(item.section));
 
   // What each quick action needs. Opening the target page needs `read`; the
   // action itself needs the matching write permission.
   const missingAddEmployee = missingPermissions(admin.permissions, [["employees", "read"], ["employees", "insert"]]);
   const missingApproveRestaurants = missingPermissions(admin.permissions, [["restaurants", "read"], ["restaurants", "update"]]);
-  const missingApproveRiders = missingPermissions(admin.permissions, [["riders", "read"], ["riders", "update"]]);
+  const missingPayments = missingPermissions(admin.permissions, [["sales", "read"]]);
   const missingCreateOffer = missingPermissions(admin.permissions, [["marketing", "read"], ["marketing", "insert"]]);
   const missingAddRestaurant = missingPermissions(admin.permissions, [["restaurants", "read"], ["restaurants", "insert"]]);
-  const missingAddRider = missingPermissions(admin.permissions, [["riders", "read"], ["riders", "insert"]]);
 
   /* ---------------------------------------------------------- quick action attention
    * Blink indicators on the topbar quick-action buttons so the admin can
@@ -79,24 +114,25 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedM
   // Restaurants awaiting approval = new registrations + profile edits waiting for review.
   const { data: pendingRegistrations = [] } = useGetRegistrationRequestsQuery("pending", { skip: !allowed.has("restaurants") });
   const { data: pendingProfileEdits = [] } = useGetProfileEditRequestsQuery("pending", { skip: !allowed.has("restaurants") });
-  const { data: ridersForAttention = [] } = useGetRidersQuery(undefined, { skip: !allowed.has("riders") });
-  const { data: employeesForAttentionData } = useGetEmployeesQuery({ page: 1, limit: 100 }, { skip: !allowed.has("employees") });
-
-  const employeesForAttention =
-    employeesForAttentionData?.employees ?? [];
 
   const pendingRestaurantsCount = pendingRegistrations.length + pendingProfileEdits.length;
-  const pendingRidersCount = ridersForAttention.filter((rider) => String(rider.status).toLowerCase() === "pending").length;
-  const unassignedEmployeesCount = employeesForAttention.filter((employee) => employee.role === "Unassigned").length;
 
   useEffect(() => {
-    // Keep the independently selected management section active while the
-    // shared management workspace is displayed.
-    if (screen === "management") return;
+    // The management workspace can be opened from outside the sidebar (the
+    // dashboard cards), so follow the chosen subsection to highlight its section.
+    if (screen === "management") {
+      const owner = (Object.keys(navigationSubsections) as NavigationSectionId[]).find((id) => navigationSubsections[id].some((sub) => sub.id === selectedSubsection))
+        ?? navigationSections.find((item) => item.section === selectedSubsection.split("-")[0])?.section;
+      if (owner && owner !== sidebarVm.selectedSection && allowed.has(owner)) {
+        sidebarVm.selectSection(owner);
+        sidebarVm.selectSubsection(selectedSubsection);
+      }
+      return;
+    }
 
     const target = screenToSection[screen] ?? "dashboard";
     if (sidebarVm.selectedSection !== target && allowed.has(target)) sidebarVm.selectSection(target);
-  }, [screen, sidebarVm.selectedSection]);
+  }, [screen, sidebarVm.selectedSection, selectedSubsection]);
 
   // Employee pages are separate screens rather than management subsections,
   // so their highlighted submenu item follows the current screen.
@@ -111,6 +147,7 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedM
 
     if (section === "dashboard") onNavigate("dashboard");
     else if (section === "employees") onNavigate("employees");
+    else if (section === "grouporders") onSelectManagement("grouporders", "grouporders-all");
     else {
       const first = navigationSubsections[section][0];
       onSelectManagement(first?.managementId ?? section, first?.id);
@@ -144,7 +181,11 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedM
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
-  const firstName = admin.name.trim().split(/\s+/)[0] || "Admin";
+  const todayLabel = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const firstName =admin.name.trim().split(/\s+/)[0] || "Admin";
+  const activeSection = sections.find((item) => selectedSubsection.startsWith(`${item.id}-`));
+  const managementCopy = screen === "management" ? managementPageCopy[selectedSubsection] : undefined;
+  const toolbarTitle = screen === "management" ? managementCopy?.title ?? activeSection?.label ?? title : title;
 
   type SearchResult = { id: string; label: string; group: string; icon: Parameters<typeof Icon>[0]["name"]; run: () => void };
 
@@ -161,7 +202,6 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedM
     // Quick actions only appear in search when the employee may actually run them.
     if (missingAddEmployee.length === 0) results.push({ id: "action-add-employee", label: "Add Employee", group: "Quick action", icon: "users", run: onQuickAddEmployee });
     if (missingAddRestaurant.length === 0) results.push({ id: "action-add-restaurant", label: "Add Restaurant", group: "Quick action", icon: "store", run: () => navigateManagementShortcut("restaurants", "restaurants-all") });
-    if (missingAddRider.length === 0) results.push({ id: "action-add-rider", label: "Add Rider", group: "Quick action", icon: "rider", run: () => navigateManagementShortcut("riders", "riders-all") });
     if (missingCreateOffer.length === 0) results.push({ id: "action-create-offer", label: "Create Offer", group: "Quick action", icon: "megaphone", run: () => navigateManagementShortcut("marketing", "marketing-offers") });
 
     return results;
@@ -186,9 +226,9 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedM
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  return <div className="app-shell">
+  return <SectionActionsContext.Provider value={sectionActionsHost}><div className="app-shell">
     <aside className={`sidebar ${sidebarVm.mobileMenuOpen ? "is-mobile-open" : ""}`}>
-      <Brand light />
+      <Brand />
       <nav className="sidebar-nav" aria-label="Main navigation">
         {navigationGroups.map((group) => {
           const groupSections = sections.filter((item) => item.group === group.id);
@@ -224,67 +264,66 @@ export function AppShell({ title, subtitle, screen, admin, noticeOpen, selectedM
           );
         })}
       </nav>
+      <div className="sidebar-footer" ref={profileRef}>
+        {profileMenuOpen && (
+          <div className="settings-menu" role="menu">
+            <div className="settings-menu-header"><UserAvatar name={admin.name} imageUrl={admin.imageUrl} size="medium" /><span><strong>{firstName}</strong><small>{admin.role}</small></span></div>
+            <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); sidebarVm.setMobileMenuOpen(false); onNavigate("profile"); }}><Icon name="shield" size={14} /> Profile</button>
+            <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); sidebarVm.setMobileMenuOpen(false); onNavigate("edit-profile"); }}><Icon name="edit" size={14} /> Edit Profile</button>
+            <button type="button" role="menuitem" className="settings-menu-signout" onClick={() => { setProfileMenuOpen(false); onNavigate("login"); }}><Icon name="logout" size={14} /> Log Out</button>
+          </div>
+        )}
+        <button type="button" className={"sidebar-link" + (profileMenuOpen ? " is-active" : "")} aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
+          <Icon name="settings" size={17} /><span>Settings</span><span className="sidebar-link-chevron"><Icon name="chevron-down" size={13} /></span>
+        </button>
+      </div>
     </aside>
-    <main className="app-main">
-      <header className="topbar">
-        <button className="mobile-menu" type="button" aria-label="Open menu" aria-expanded={sidebarVm.mobileMenuOpen} onClick={() => sidebarVm.setMobileMenuOpen((open) => !open)}><Icon name="menu" /></button>
-
-        <div className="topbar-search" ref={searchBoxRef}>
-          <Icon name="search" size={15} />
-          <input
-            value={searchQuery}
-            onChange={(event) => { setSearchQuery(event.target.value); setSearchOpen(true); }}
-            onFocus={() => setSearchOpen(true)}
-            placeholder="Search users, restaurants, orders, riders…"
-            aria-label="Search the admin portal"
-          />
-          {searchOpen && searchQuery.trim() && (
-            <div className="topbar-search-results">
-              {searchResults.length === 0 && <div className="topbar-search-empty">No matches for “{searchQuery}”.</div>}
-              {searchResults.map((result) => (
-                <button key={result.id} type="button" onClick={() => runSearchResult(result)}>
-                  <Icon name={result.icon} size={14} />
-                  <span>{result.label}</span>
-                  <small>{result.group}</small>
-                </button>
-              ))}
-            </div>
-          )}
+    <main className={`app-main${screen === "dashboard" ? " app-main--dashboard" : ""}`}>
+      <header className={`page-toolbar${screen === "dashboard" ? "" : " page-toolbar--section"}`}>
+        <div className="page-toolbar-lead">
+          <button className="mobile-menu" type="button" aria-label="Open menu" aria-expanded={sidebarVm.mobileMenuOpen} onClick={() => sidebarVm.setMobileMenuOpen((open) => !open)}><Icon name="menu" /></button>
+          {screen === "dashboard" ? <div className="page-toolbar-greeting"><h1>{title}</h1><p>{todayLabel}</p></div> : <div className="page-toolbar-greeting page-toolbar-section-heading"><h1>{toolbarTitle}</h1>{selectedSubsection.startsWith("sales-") && screen === "management" && <p>{managementCopy?.subtitle}</p>}</div>}
         </div>
 
-        <div className="topbar-actions">
-          <div className="topbar-action-links" aria-label="Quick actions">
-            <QuickAction label="Add Employee" task="add employees" icon="users" missing={missingAddEmployee} attention={unassignedEmployeesCount > 0} onRun={onQuickAddEmployee}
-              enabledTitle={unassignedEmployeesCount > 0 ? `Add a new employee. ${unassignedEmployeesCount} ${unassignedEmployeesCount === 1 ? "employee still needs" : "employees still need"} a role.` : "Add a new employee"} />
-            <QuickAction label="Approve Restaurants" task="approve restaurants" icon="store" missing={missingApproveRestaurants} attention={pendingRestaurantsCount > 0} onRun={() => navigateManagementShortcut("restaurants", "restaurants-approvals")}
-              enabledTitle={pendingRestaurantsCount > 0 ? `${pendingRestaurantsCount} ${pendingRestaurantsCount === 1 ? "restaurant is" : "restaurants are"} waiting for approval` : "No restaurants are waiting for approval"} />
-            <QuickAction label="Approve Riders" task="approve riders" icon="rider" missing={missingApproveRiders} attention={pendingRidersCount > 0} onRun={() => navigateManagementShortcut("riders", "riders-approvals")}
-              enabledTitle={pendingRidersCount > 0 ? `${pendingRidersCount} ${pendingRidersCount === 1 ? "rider is" : "riders are"} waiting for approval` : "No riders are waiting for approval"} />
-            <QuickAction label="Create Offer" task="create offers" icon="megaphone" primary missing={missingCreateOffer} onRun={() => navigateManagementShortcut("marketing", "marketing-offers")} enabledTitle="Create a new offer for customers" />
-          </div>
-
-          <div className="notification-wrap"><button className="icon-button" type="button" aria-label="Notifications" onClick={onToggleNotice}><Icon name="bell" /></button>{noticeOpen && <div className="notification-popover"><strong>No notifications</strong><span>You’re all caught up.</span></div>}</div>
-
-          <div className="topbar-profile" ref={profileRef}>
-            <button type="button" className="topbar-profile-trigger" aria-label="Open my profile" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
-              <UserAvatar name={admin.name} size="small" />
-              <span className="sr-only">{firstName}</span>
-            </button>
-            {profileMenuOpen && (
-              <div className="topbar-profile-menu" role="menu">
-                <div className="topbar-profile-menu-header"><UserAvatar name={admin.name} size="medium" /><span><strong>{firstName}</strong><small>{admin.role}</small></span></div>
-                <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); onNavigate("profile"); }}><Icon name="shield" size={14} /> My Profile</button>
-                <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); onNavigate("edit-profile"); }}><Icon name="edit" size={14} /> Edit Profile</button>
-                <button type="button" role="menuitem" className="topbar-profile-menu-signout" onClick={() => { setProfileMenuOpen(false); onNavigate("login"); }}><Icon name="logout" size={14} /> Log Out</button>
+        {screen === "dashboard" && (
+          <div className="topbar-search" ref={searchBoxRef}>
+            <Icon name="search" size={15} />
+            <input
+              value={searchQuery}
+              onChange={(event) => { setSearchQuery(event.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="Search"
+              aria-label="Search the admin portal"
+            />
+            {searchOpen && searchQuery.trim() && (
+              <div className="topbar-search-results">
+                {searchResults.length === 0 && <div className="topbar-search-empty">No matches for “{searchQuery}”.</div>}
+                {searchResults.map((result) => (
+                  <button key={result.id} type="button" onClick={() => runSearchResult(result)}>
+                    <Icon name={result.icon} size={14} />
+                    <span>{result.label}</span>
+                    <small>{result.group}</small>
+                  </button>
+                ))}
               </div>
             )}
           </div>
+        )}
+
+        <div className="topbar-actions">
+          {screen === "dashboard" ? <div className="topbar-action-links" aria-label="Quick actions">
+            <QuickAction label="Payments" task="view payments" icon="wallet" missing={missingPayments} onRun={() => navigateManagementShortcut("sales", "sales-all")} enabledTitle="View payments and transactions" />
+            <QuickAction label="Approve Restaurants" task="approve restaurants" icon="store" missing={missingApproveRestaurants} attention={pendingRestaurantsCount > 0} onRun={() => navigateManagementShortcut("restaurants", "restaurants-approvals")}
+              enabledTitle={pendingRestaurantsCount > 0 ? `${pendingRestaurantsCount} ${pendingRestaurantsCount === 1 ? "restaurant is" : "restaurants are"} waiting for approval` : "No restaurants are waiting for approval"} />
+            <QuickAction label="Create Offer" task="create offers" icon="megaphone" primary missing={missingCreateOffer} onRun={() => navigateManagementShortcut("marketing", "marketing-offers")} enabledTitle="Create a new offer for customers" />
+          </div> : <div className="section-actions-host" ref={setSectionActionsHost} aria-label="Section actions" />}
+
+          <div className="notification-wrap"><button className="icon-button" type="button" aria-label="Notifications" onClick={onToggleNotice}><Icon name="bell" /></button>{noticeOpen && <div className="notification-popover"><strong>No notifications</strong><span>You’re all caught up.</span></div>}</div>
         </div>
       </header>
       <div className="page-content">
-        {(screen === "dashboard" || screen === "profile") && <header className="page-heading"><h1>{title}</h1><p>{subtitle}</p></header>}
         {children}
       </div>
     </main>
-  </div>;
+  </div></SectionActionsContext.Provider>;
 }

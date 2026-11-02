@@ -5,7 +5,15 @@ import type { PermissionMatrix } from "../models/employee";
 import { can, type PermissionMap } from "../../admin/models/access";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { Icon } from "../../admin/components/Icon";
-import { RefreshButton } from "../../admin/components/RefreshButton";
+import { RequiredFieldMark } from "../../admin/components/RequiredFieldMark";
+import { ManagementActionButton } from "../../admin/components/ManagementActionButton";
+import { ManagementStatus } from "../../admin/components/ManagementStatus";
+import { TransientSuccessMessage } from "../../admin/components/TransientSuccessMessage";
+import { ListToolbar } from "../../admin/components/ListToolbar";
+import { StatusTabs } from "../../admin/components/StatusTabs";
+import { PrimaryActionButton } from "../../admin/components/PrimaryActionButton";
+import { SectionActions } from "../../admin/components/SectionActions";
+import { ListPagination } from "../../admin/components/ListPagination";
 import { UserAvatar } from "../../admin/components/UserAvatar";
 
 import {
@@ -30,13 +38,11 @@ import {
 
 
 export function EmployeesView({
-  onManageRoles,
   permissions,
   autoOpenCreate = false,
   onAutoOpenHandled,
   onOpenDetails,
 }: {
-  onManageRoles?: () => void;
   permissions: PermissionMap;
   /** Opens the "Add employee" panel automatically (e.g. from the topbar quick action). */
   autoOpenCreate?: boolean;
@@ -49,7 +55,6 @@ export function EmployeesView({
   const canCreateRole = can(permissions, "roles", "insert");
   const canCreatePermission = can(permissions, "permissions", "insert");
   const canChangeStatus = can(permissions, "employees", "update");
-  const canOpenRoles = canCreateRole || can(permissions, "roles", "read");
 
   const [
     showCreate,
@@ -201,58 +206,24 @@ export function EmployeesView({
           HEADER
       ================================= */}
 
-      <header className="employee-header">
-        <div>
-          <h2>Team Members</h2>
-
-          <p>
-            Create employee accounts and
-            assign their administrative role.
-          </p>
+      <header className="employee-header employee-directory-header">
+        <div className="employee-directory-controls">
+          <StatusTabs label="Filter employees by status" value={vm.statusFilter} onChange={(value) => vm.setStatusFilter(value as "all" | "active" | "inactive")} tabs={[{ id: "all", label: "All Employees", count: vm.employeeCounts.all }, { id: "active", label: "Active", count: vm.employeeCounts.active }, { id: "inactive", label: "Inactive", count: vm.employeeCounts.inactive }]} />
         </div>
-
-        <div className="employee-header-actions">
-          <RefreshButton refreshing={vm.isFetching} label="the employee list" onRefresh={vm.refresh} />
-
-          {onManageRoles && (
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={onManageRoles}
-              disabled={!canOpenRoles}
-              data-tooltip={canOpenRoles ? undefined : noAccess("view or manage roles")}
-              data-tooltip-kind="access"
-            >
-              Roles &amp; access
-            </button>
-          )}
-
-          <button
-            className="primary-button"
-            type="button"
-            disabled={!canAddEmployee}
-            data-tooltip={canAddEmployee ? undefined : noAccess("add employees")}
-            data-tooltip-kind="access"
-            onClick={() => {
-              resetForm();
-              setEmployeeId(vm.suggestedEmployeeId);
-              setShowCreate(true);
-            }}
-          >
+        <SectionActions>
+          <PrimaryActionButton type="button" disabled={!canAddEmployee}
+            data-tooltip={canAddEmployee ? undefined : noAccess("add employees")} data-tooltip-kind="access"
+            onClick={() => { resetForm(); setEmployeeId(vm.suggestedEmployeeId); setShowCreate(true); }}>
             Add employee
-          </button>
-        </div>
+          </PrimaryActionButton>
+        </SectionActions>
       </header>
 
       {/* ================================
           SUCCESS / ERROR
       ================================= */}
 
-      {vm.savedMessage && (
-        <div className="success-banner">
-          {vm.savedMessage}
-        </div>
-      )}
+      <TransientSuccessMessage message={vm.savedMessage} />
 
       {vm.errorMessage && (
         <div className="api-state api-state--error">
@@ -263,25 +234,7 @@ export function EmployeesView({
       {/* ================================
           SEARCH
       ================================= */}
-
-      <div className="workspace-stat-row">
-        <div>
-          <strong>{vm.isLoading ? "…" : vm.totalEmployees}</strong>
-          <span>Team members</span>
-        </div>
-      </div>
-
-      <div className="list-search">
-        <input
-          type="search"
-          value={vm.query}
-          onChange={(event) =>
-            vm.setQuery(event.target.value)
-          }
-          placeholder="Search staff members…"
-          aria-label="Search staff members"
-        />
-      </div>
+      <ListToolbar value={vm.query} onChange={vm.setQuery} placeholder="Search staff members" label="the employee list" refreshing={vm.isFetching} onRefresh={vm.refresh} />
 
       {/* ================================
           LOADING
@@ -327,13 +280,32 @@ export function EmployeesView({
                   (employee) => (
                     <tr
                       key={employee.id}
+                      className={onOpenDetails ? "clickable-list-row" : undefined}
+                      tabIndex={onOpenDetails ? 0 : undefined}
+                      aria-label={onOpenDetails ? `Open details for ${employee.name}` : undefined}
+                      onClick={onOpenDetails ? () => onOpenDetails(employee.id) : undefined}
+                      onKeyDown={(event) => {
+                        if (onOpenDetails && (event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
+                          event.preventDefault();
+                          onOpenDetails(employee.id);
+                        }
+                      }}
                     >
                       <td>
                         <div className="user-cell">
-                          <UserAvatar name={employee.name} size="medium" />
-                          <strong>
-                            {employee.name}
-                          </strong>
+                          <UserAvatar name={employee.name} imageUrl={employee.profileImgUrl} size="medium" />
+                          {onOpenDetails ? (
+                            <button
+                              type="button"
+                              className="table-link-button"
+                              onClick={(event) => { event.stopPropagation(); onOpenDetails(employee.id); }}
+                              aria-label={`View ${employee.name}`}
+                            >
+                              {employee.name}
+                            </button>
+                          ) : (
+                            <strong>{employee.name}</strong>
+                          )}
                         </div>
                       </td>
 
@@ -365,27 +337,14 @@ export function EmployeesView({
                       </td>
 
                       <td>
-                        <span className="role-pill">
-                          {employee.status}
-                        </span>
+                        <ManagementStatus status={employee.status} />
                       </td>
 
                       <td>
-                        {onOpenDetails && (
-                          <button
-                            className="table-action"
-                            type="button"
-                            onClick={() =>
-                              onOpenDetails(employee.id)
-                            }
-                          >
-                            View
-                          </button>
-                        )}
-
-                        <button
-                          className="table-action"
-                          type="button"
+                        <ManagementActionButton
+                          action={employee.status === "Active" ? "deactivate" : "activate"}
+                          stateIndicator={employee.status === "Active" ? "active" : "blocked"}
+                          ariaLabel={`${employee.status === "Active" ? "Deactivate" : "Activate"} ${employee.name}`}
                           onClick={() =>
                             vm.updateStatus(
                               employee.id,
@@ -399,14 +358,9 @@ export function EmployeesView({
                             !canChangeStatus ||
                             vm.isUpdatingStatus
                           }
-                          data-tooltip={!canChangeStatus ? noAccess("activate or deactivate employees") : vm.isUpdatingStatus ? "Please wait, another status change is being saved" : undefined}
-                          data-tooltip-kind={canChangeStatus ? undefined : "access"}
-                        >
-                          {employee.status ===
-                            "Active"
-                            ? "Deactivate"
-                            : "Activate"}
-                        </button>
+                          tooltip={!canChangeStatus ? noAccess("activate or deactivate employees") : vm.isUpdatingStatus ? "Please wait, another status change is being saved" : undefined}
+                          tooltipKind={canChangeStatus ? undefined : "access"}
+                        />
                       </td>
                     </tr>
                   )
@@ -428,68 +382,9 @@ export function EmployeesView({
           PAGINATION
       ================================= */}
 
-      {!vm.isLoading &&
-        !vm.isError &&
-        vm.totalEmployees > 0 && (
-          <div className="employee-pagination">
-            <span>
-              Showing{" "}
-              {(vm.page - 1) *
-                vm.pageSize +
-                1}
-              –
-              {Math.min(
-                vm.page *
-                vm.pageSize,
-                vm.totalEmployees
-              )}{" "}
-              of{" "}
-              {vm.totalEmployees}
-            </span>
-
-            <div>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() =>
-                  vm.setPage(
-                    vm.page - 1
-                  )
-                }
-                disabled={
-                  vm.page === 1 ||
-                  vm.isFetching
-                }
-                data-tooltip={vm.page === 1 ? "You are already on the first page" : vm.isFetching ? "Still loading, please wait" : undefined}
-              >
-                Previous
-              </button>
-
-              <span>
-                Page {vm.page} of{" "}
-                {vm.totalPages}
-              </span>
-
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() =>
-                  vm.setPage(
-                    vm.page + 1
-                  )
-                }
-                disabled={
-                  vm.page ===
-                  vm.totalPages ||
-                  vm.isFetching
-                }
-                data-tooltip={vm.page === vm.totalPages ? "You are already on the last page" : vm.isFetching ? "Still loading, please wait" : undefined}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+      {!vm.isLoading && !vm.isError && vm.totalEmployees > 0 && (
+        <ListPagination page={vm.page} count={vm.totalPages} onChange={vm.setPage} disabled={vm.isFetching} />
+      )}
 
       {/* ================================
           CREATE EMPLOYEE MODAL
@@ -512,7 +407,7 @@ export function EmployeesView({
 
         <div className="form-grid">
           <label>
-            <span>Employee ID</span>
+            <span>Employee ID<RequiredFieldMark /></span>
 
             <input
               value={employeeId}
@@ -536,7 +431,7 @@ export function EmployeesView({
           </label>
 
           <label>
-            <span>Name</span>
+            <span>Name<RequiredFieldMark /></span>
 
             <input
               value={name}
@@ -546,11 +441,12 @@ export function EmployeesView({
                 )
               }
               disabled={isCreating}
+              required
             />
           </label>
 
           <label>
-            <span>Email</span>
+            <span>Email<RequiredFieldMark /></span>
 
             <input
               type="email"
@@ -561,11 +457,12 @@ export function EmployeesView({
                 )
               }
               disabled={isCreating}
+              required
             />
           </label>
 
           <label>
-            <span>Password</span>
+            <span>Password<RequiredFieldMark /></span>
 
             <span className="password-field">
               <input
@@ -580,6 +477,7 @@ export function EmployeesView({
                 placeholder="Minimum 8 characters"
                 autoComplete="new-password"
                 disabled={isCreating}
+                required
               />
 
               <button
@@ -657,7 +555,7 @@ export function EmployeesView({
             <>
               <label>
                 <span>
-                  Existing role
+                  Existing role<RequiredFieldMark />
                 </span>
 
                 <RoleSearchSelect
@@ -705,7 +603,7 @@ export function EmployeesView({
             <div className="form-grid">
               <label>
                 <span>
-                  New role name
+                  New role name<RequiredFieldMark />
                 </span>
 
                 <input
@@ -716,6 +614,7 @@ export function EmployeesView({
                     )
                   }
                   disabled={isCreating}
+                  required
                 />
               </label>
 
@@ -783,8 +682,7 @@ export function EmployeesView({
             Cancel
           </button>
 
-          <button
-            className="primary-button"
+          <PrimaryActionButton
             type="button"
             onClick={submit}
             disabled={Boolean(createBlockedReason)}
@@ -793,7 +691,7 @@ export function EmployeesView({
             {isCreating
               ? "Creating…"
               : "Create Employee"}
-          </button>
+          </PrimaryActionButton>
         </div>
       </SidePanel>
     </section>

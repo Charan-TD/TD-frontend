@@ -7,9 +7,13 @@ type IconName =
   | "chevron-down" | "edit" | "help" | "lock" | "logout" | "menu"
   | "more" | "plus" | "rider" | "search" | "settings" | "store" | "users"
   | "bag" | "wallet" | "dashboard" | "station" | "sparkle" | "shield" | "eye" | "eye-off"
-  | "megaphone" | "file" | "zap";
+  | "megaphone" | "file" | "zap" | "employee" | "receipt" | "refresh"
+  | "group" | "info" | "ban" | "unblock" | "block" | "play-circle" | "pause-circle" | "toggle-check" | "toggle-slash" | "trash" | "mail" | "phone" | "user";
 
 const paths: Record<IconName, ReactNode> = {
+  phone: <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>,
+  user: <><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></>,
+  mail: <><rect x="3" y="5" width="18" height="14" rx="1"/><path d="m3 6 9 7 9-7"/></>,
   "arrow-right": <><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></>,
   "arrow-left": <><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></>,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
@@ -29,6 +33,7 @@ const paths: Record<IconName, ReactNode> = {
   settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.2 2.2-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-3.2v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L6.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1h-.2v-3.2h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.2-2.2.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h3.2v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.2 2.2-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1Z"/></>,
   store: <><path d="M3 10h18l-1.5-5h-15Z"/><path d="M5 10v10h14V10M9 20v-6h6v6"/><path d="M3 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/></>,
   users: <><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M17 11a4 4 0 0 0 0-8M21 21v-2a4 4 0 0 0-3-3.9"/></>,
+  group: <><circle cx="12" cy="8" r="3"/><path d="M6.5 20v-1.5a3.5 3.5 0 0 1 3.5-3.5h4a3.5 3.5 0 0 1 3.5 3.5V20"/><circle cx="4.5" cy="10" r="2"/><path d="M2 18v-1a2.5 2.5 0 0 1 2.5-2.5"/><circle cx="19.5" cy="10" r="2"/><path d="M22 18v-1a2.5 2.5 0 0 0-2.5-2.5"/></>,
   bag: <><path d="M6 8h12l1 13H5Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></>,
   wallet: <><path d="M20 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h15v10a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6"/><path d="M16 14h.01"/></>,
   dashboard: <><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/></>,
@@ -40,6 +45,18 @@ const paths: Record<IconName, ReactNode> = {
   megaphone: <><path d="M3 11v2a2 2 0 0 0 2 2h1l3 5 1-.6-2-4.4h7l5 2V6l-5 2H6a2 2 0 0 0-2 2Z"/><path d="M13 8v8"/></>,
   file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></>,
   zap: <path d="M13 2 4 14h6l-1 8 9-12h-6Z"/>,
+  employee: <><rect width="18" height="16" x="3" y="5" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M5.5 16c.5-1.7 1.7-2.5 3.5-2.5s3 .8 3.5 2.5M15 10h3M15 14h3"/></>,
+  refresh: <><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></>,
+  receipt: <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></>,
+  info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></>,
+  ban: <><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></>,
+  unblock: <><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></>,
+  block: <><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></>,
+  "play-circle": <><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4Z"/></>,
+  "pause-circle": <><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></>,
+  "toggle-check": <><rect x="1" y="6" width="22" height="12" rx="6" fill="currentColor"/><circle cx="17" cy="12" r="4.3" fill="white" stroke="white"/><path d="m15.2 12 1.2 1.2 2.4-2.5"/></>,
+  "toggle-slash": <><rect x="1" y="6" width="22" height="12" rx="6" fill="currentColor"/><circle cx="7" cy="12" r="4.3" fill="white" stroke="white"/><path d="m5.7 13.4 2.6-2.8"/></>,
+  trash: <><path d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3"/></>,
 };
 
 export function Icon({ name, size = 18, stroke = 1.8 }: { name: IconName; size?: number; stroke?: number }) {

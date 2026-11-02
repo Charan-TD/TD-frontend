@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-import { Brand } from "../components/Brand";
 import { Icon } from "../components/Icon";
+import { RequiredFieldMark } from "../components/RequiredFieldMark";
 import type { EmployeeLoginData } from "../api/authApi";
 import { useLoginViewModel } from "../viewmodels/loginViewModel";
 import { ForgotPasswordView } from "./ForgotPasswordView";
@@ -15,38 +15,32 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
   return (
     <main className="login-screen">
       <section className="login-story">
-        <Brand light />
+        <div className="brand login-brand">
+          <span className="brand-mark"><img src="/login/logo.png" alt="Train Dabba" width={82} height={77} /></span>
+          <span className="brand-copy"><strong>Train Dabba</strong><small>Super admin portal</small></span>
+        </div>
 
         <div className="login-story__pattern pattern-one" />
         <div className="login-story__pattern pattern-two" />
+        <div className="login-story__dots" aria-hidden="true" />
 
         <div className="login-story__content">
           <span className="eyebrow eyebrow--light">
-            TRAIN DABBA · CONTROL CENTRE
+            TRAIN DABBA · ADMIN PORTAL
           </span>
 
-          <h1>Every journey deserves a well-run kitchen.</h1>
+          <h1>Powering a smoother <span>food journey</span></h1>
 
           <p>
-            One calm workspace for the people, meals and operations behind
-            every Train Dabba order.
+            Manage orders, users, restaurants and more —<br />
+            all from one place.
           </p>
 
-          <div className="story-stats">
-            <div>
-              <strong>—</strong>
-              <span>Happy customers</span>
-            </div>
-
-            <div>
-              <strong>—</strong>
-              <span>Restaurants</span>
-            </div>
-
-            <div>
-              <strong>—</strong>
-              <span>Order success</span>
-            </div>
+          <div className="login-features">
+            <div><Icon name="receipt" size={30} /><span><strong>Orders</strong><small>Track &amp; manage</small></span></div>
+            <div><Icon name="users" size={30} /><span><strong>Users</strong><small>Control access</small></span></div>
+            <div><Icon name="store" size={30} /><span><strong>Restaurants</strong><small>Monitor operations</small></span></div>
+            <div><Icon name="wallet" size={30} /><span><strong>Payments</strong><small>Handle transactions</small></span></div>
           </div>
         </div>
       </section>
@@ -54,7 +48,10 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
       <section className="login-form-area">
         <div className="login-card">
           <div className="login-mobile-brand">
-            <Brand compact />
+            <div className="brand login-brand">
+              <span className="brand-mark"><img src="/login/logo.png" alt="Train Dabba" width={82} height={77} /></span>
+              <span className="brand-copy"><strong>Train Dabba</strong><small>Super admin portal</small></span>
+            </div>
           </div>
 
           {forgotOpen ? (
@@ -66,10 +63,10 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
           <>
           <span className="eyebrow">WELCOME BACK</span>
 
-          <h2>Sign in to admin</h2>
+          <h2>Sign in to your account</h2>
 
           <p className="login-subtitle">
-            Enter your details to manage the Train Dabba platform.
+            Use your registered email and password to continue.
           </p>
 
           <form
@@ -79,12 +76,16 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
             }}
           >
             <label className="field-label">
-              Email address
+              <span>Email address<RequiredFieldMark /></span>
 
               <span className="input-wrap">
+                <Icon name="mail" size={20} />
                 <input
                   type="email"
-                  placeholder="you@company.com"
+                  placeholder="Enter your email address"
+                  name="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   value={vm.email}
                   onChange={(event) => vm.setEmail(event.target.value)}
                   required
@@ -92,17 +93,18 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
                   disabled={vm.isSubmitting}
                 />
 
-                <Icon name="users" size={16} />
               </span>
             </label>
 
             <label className="field-label">
-              Password
+              <span>Password<RequiredFieldMark /></span>
 
               <span className="input-wrap">
+                <Icon name="lock" size={20} />
                 <input
                   type={vm.passwordVisible ? "text" : "password"}
                   placeholder="Enter your password"
+                  name="password"
                   value={vm.password}
                   onChange={(event) => vm.setPassword(event.target.value)}
                   required
@@ -137,7 +139,7 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
                   onChange={(event) => vm.setRememberMe(event.target.checked)}
                   disabled={vm.isSubmitting}
                 />
-                <span>Remember me</span>
+                <span>Remember my email</span>
               </label>
 
               <button
@@ -165,7 +167,7 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
               <span>
                 {vm.isSubmitting
                   ? "Signing in..."
-                  : "Continue to dashboard"}
+                  : "Sign in"}
               </span>
 
               {!vm.isSubmitting && (

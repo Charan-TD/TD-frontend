@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "../../admin/components/Icon";
+import { SectionActions } from "../../admin/components/SectionActions";
 import { ComingSoonPanel } from "../../admin/components/ComingSoonPanel";
 
 /**
@@ -11,9 +12,9 @@ import { ComingSoonPanel } from "../../admin/components/ComingSoonPanel";
 export function EmployeeActivityView({ onBack }: { onBack: () => void }) {
   return (
     <section className="employee-workspace">
-      <button className="back-link" type="button" onClick={onBack}>
+      <SectionActions><button className="back-link" type="button" onClick={onBack}>
         <Icon name="arrow-left" size={15} /> Back to staff list
-      </button>
+      </button></SectionActions>
       <ComingSoonPanel
         eyebrow="EMPLOYEE ACTIVITY"
         title="Employee activity log"

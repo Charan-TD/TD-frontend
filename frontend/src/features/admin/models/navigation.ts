@@ -5,6 +5,7 @@ export type NavigationSectionId =
   | "restaurants"
   | "riders"
   | "orders"
+  | "grouporders"
   | "stations"
   | "sales"
   | "marketing"
@@ -21,7 +22,7 @@ export const navigationGroups: { id: NavigationGroupId; label: string }[] = [
 export type NavigationItem = {
   id: string;
   label: string;
-  icon: "dashboard" | "users" | "store" | "rider" | "bag" | "wallet" | "chart" | "settings" | "check" | "station" | "megaphone" | "file";
+  icon: "dashboard" | "employee" | "receipt" | "users" | "store" | "rider" | "bag" | "wallet" | "chart" | "settings" | "check" | "station" | "megaphone" | "file" | "group";
   section: NavigationSectionId;
   managementId?: string;
   group?: NavigationGroupId;
@@ -30,12 +31,13 @@ export type NavigationItem = {
 export const navigationSections: NavigationItem[] = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard", section: "dashboard", group: "overview" },
   { id: "users", label: "Users", icon: "users", section: "users", group: "operations" },
-  { id: "employees", label: "Employees", icon: "users", section: "employees", group: "operations" },
+  { id: "employees", label: "Employees", icon: "employee", section: "employees", group: "operations" },
   { id: "restaurants", label: "Restaurants", icon: "store", section: "restaurants", group: "operations" },
-  { id: "riders", label: "Riders", icon: "rider", section: "riders", group: "operations" },
-  { id: "orders", label: "Orders", icon: "bag", section: "orders", managementId: "orders", group: "operations" },
+  { id: "riders", label: "Delivery Partners", icon: "rider", section: "riders", group: "operations" },
+  { id: "orders", label: "Orders", icon: "receipt", section: "orders", managementId: "orders", group: "operations" },
+  { id: "grouporders", label: "Group Orders", icon: "group", section: "grouporders", managementId: "grouporders", group: "operations" },
   { id: "stations", label: "Stations", icon: "station", section: "stations", managementId: "stations", group: "operations" },
-  { id: "sales", label: "Sales", icon: "wallet", section: "sales", group: "business" },
+  { id: "sales", label: "Payments", icon: "wallet", section: "sales", group: "business" },
   { id: "marketing", label: "Marketing", icon: "megaphone", section: "marketing", group: "business" },
   { id: "reports", label: "Reports", icon: "file", section: "reports", group: "business" },
 ];
@@ -44,7 +46,6 @@ export const navigationSubsections: Record<NavigationSectionId, NavigationItem[]
   dashboard: [],
   users: [
     { id: "users-all", label: "All Users", icon: "users", section: "users", managementId: "users" },
-    { id: "users-blocked", label: "Inactive / Blocked", icon: "users", section: "users", managementId: "users" },
     { id: "users-complaints", label: "Complaints", icon: "users", section: "users", managementId: "users" },
     { id: "users-activity", label: "User Activity", icon: "chart", section: "users", managementId: "users" },
   ],
@@ -57,30 +58,25 @@ export const navigationSubsections: Record<NavigationSectionId, NavigationItem[]
     { id: "restaurants-all", label: "All Restaurants", icon: "store", section: "restaurants", managementId: "restaurants" },
     { id: "restaurants-performance", label: "Performance", icon: "chart", section: "restaurants", managementId: "restaurants" },
     { id: "restaurants-approvals", label: "Approvals", icon: "check", section: "restaurants", managementId: "restaurants" },
-    { id: "restaurants-blocked", label: "Inactive / Blocked", icon: "store", section: "restaurants", managementId: "restaurants" },
     { id: "restaurants-complaints", label: "Complaints", icon: "users", section: "restaurants", managementId: "restaurants" },
   ],
   riders: [
-    { id: "riders-all", label: "All Riders", icon: "rider", section: "riders", managementId: "riders" },
-    { id: "riders-approvals", label: "Applications / Approvals", icon: "check", section: "riders", managementId: "riders" },
-    { id: "riders-blocked", label: "Inactive / Blocked", icon: "rider", section: "riders", managementId: "riders" },
-    { id: "riders-complaints", label: "Complaints", icon: "users", section: "riders", managementId: "riders" },
+    { id: "riders-all", label: "Riders", icon: "rider", section: "riders", managementId: "riders" },
+    { id: "riders-handlers", label: "Handlers", icon: "users", section: "riders", managementId: "riders" },
   ],
   orders: [
-    { id: "orders-all", label: "All Orders", icon: "bag", section: "orders", managementId: "orders" },
-    { id: "orders-active", label: "Active Orders", icon: "bag", section: "orders", managementId: "orders" },
     { id: "orders-cancelled", label: "Cancelled Orders", icon: "bag", section: "orders", managementId: "orders" },
   ],
+  grouporders: [],
   stations: [
     { id: "stations-all", label: "All Stations", icon: "station", section: "stations", managementId: "stations" },
-    { id: "stations-active", label: "Active Stations", icon: "check", section: "stations", managementId: "stations" },
-    { id: "stations-inactive", label: "Inactive / Suspended", icon: "station", section: "stations", managementId: "stations" },
     { id: "stations-performance", label: "Station Performance", icon: "chart", section: "stations", managementId: "stations" },
   ],
   sales: [
-    { id: "sales-all", label: "Sales Overview", icon: "wallet", section: "sales", managementId: "sales" },
-    { id: "sales-payouts", label: "Payments", icon: "wallet", section: "sales", managementId: "sales" },
+    { id: "sales-all", label: "Transactions", icon: "wallet", section: "sales", managementId: "sales" },
+    { id: "sales-payouts", label: "Payouts", icon: "wallet", section: "sales", managementId: "sales" },
     { id: "sales-settlements", label: "Settlements", icon: "wallet", section: "sales", managementId: "sales" },
+    { id: "sales-refunds", label: "Refunds", icon: "wallet", section: "sales", managementId: "sales" },
   ],
   marketing: [
     { id: "marketing-offers", label: "Offers", icon: "megaphone", section: "marketing", managementId: "marketing" },

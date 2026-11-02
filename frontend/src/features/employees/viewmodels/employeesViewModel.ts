@@ -37,7 +37,10 @@ type CreateEmployeeFormInput = {
 
 const PAGE_SIZE = 8;
 
+export type EmployeeFilter = "all" | "active" | "inactive";
+
 export function useEmployeesViewModel(authPermissions: PermissionMap) {
+  const [statusFilter, setStatusFilter] = useState<EmployeeFilter>("all");
   const [page, setPage] =
     useState(1);
 
@@ -51,46 +54,39 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
     can(authPermissions, "employee_roles", "read") &&
     can(authPermissions, "roles", "read");
 
-  // Normal browsing asks the API for one page at a time. Searching needs
-  // every employee (the API can't search), so it switches to the full
-  // list and pages through the matches here instead.
-  const pagedQuery = useGetEmployeesQuery(
-    { page, limit: PAGE_SIZE, includeRoleMetadata },
-    { skip: isSearching },
-  );
-
-  const allQuery = useGetEmployeesQuery(
-    { all: true, includeRoleMetadata },
-    { skip: !isSearching },
-  );
-
-  const activeQuery = isSearching ? allQuery : pagedQuery;
+  // Fetch the list once so status tabs, counts, search, and pagination all
+  // operate on the same complete set of employees.
+  const allQuery = useGetEmployeesQuery({ all: true, includeRoleMetadata });
+  const activeQuery = allQuery;
   const { isLoading, isFetching, isError, refetch } = activeQuery;
+  const allEmployees = activeQuery.data?.employees ?? [];
 
   const matchingEmployees = useMemo(() => {
-    const source = activeQuery.data?.employees ?? [];
-    if (!isSearching) return source;
+    const needle = searchTerm;
+    return allEmployees.filter((employee) => {
+      const statusMatches = statusFilter === "all" ||
+        (statusFilter === "active" ? employee.status === "Active" : employee.status === "Inactive");
+      const textMatches = !needle ||
+        [employee.name, employee.email, employee.empId, employee.role]
+          .some((value) => value.toLowerCase().includes(needle));
+      return statusMatches && textMatches;
+    });
+  }, [allEmployees, searchTerm, statusFilter]);
 
-    return source.filter(
-      (employee) =>
-        employee.name.toLowerCase().includes(searchTerm) ||
-        employee.email.toLowerCase().includes(searchTerm) ||
-        employee.empId.toLowerCase().includes(searchTerm) ||
-        employee.role.toLowerCase().includes(searchTerm),
-    );
-  }, [activeQuery.data, isSearching, searchTerm]);
+  const employeeCounts = useMemo(() => ({
+    all: allEmployees.length,
+    active: allEmployees.filter((employee) => employee.status === "Active").length,
+    inactive: allEmployees.filter((employee) => employee.status === "Inactive").length,
+  }), [allEmployees]);
 
-  const totalEmployees = isSearching
-    ? matchingEmployees.length
-    : pagedQuery.data?.total ?? 0;
+  const totalEmployees = matchingEmployees.length;
+  const totalPages = Math.max(1, Math.ceil(totalEmployees / PAGE_SIZE));
+  const employees = matchingEmployees.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const totalPages = isSearching
-    ? Math.max(1, Math.ceil(matchingEmployees.length / PAGE_SIZE))
-    : Math.max(1, pagedQuery.data?.pagination.totalPages ?? 1);
-
-  const employees = isSearching
-    ? matchingEmployees.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-    : matchingEmployees;
+  const setStatus = (next: EmployeeFilter) => {
+    setStatusFilter(next);
+    setPage(1);
+  };
 
   // A new search starts from the first page of its results.
   const setQuery = (value: string) => {
@@ -339,6 +335,9 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
 
   return {
     employees,
+    statusFilter,
+    setStatusFilter: setStatus,
+    employeeCounts,
 
     roles,
     permissions,
@@ -355,6 +354,8 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
       PAGE_SIZE,
     totalEmployees,
     totalPages,
+    hasPreviousPage: page > 1,
+    hasNextPage: page < totalPages,
 
     isLoading,
 

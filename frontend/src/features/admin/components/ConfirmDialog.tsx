@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { SoftGreenButton } from "./SoftGreenButton";
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -11,6 +12,7 @@ type ConfirmDialogProps = {
   busyLabel?: string;
   busy?: boolean;
   tone?: "danger" | "default";
+  confirmButtonTone?: "default" | "soft-green";
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -24,6 +26,7 @@ export function ConfirmDialog({
   busyLabel,
   busy = false,
   tone = "default",
+  confirmButtonTone = "default",
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -75,15 +78,25 @@ export function ConfirmDialog({
             {cancelLabel}
           </button>
 
-          <button
-            type="button"
-            className={tone === "danger" ? "primary-button confirm-dialog-danger" : "primary-button"}
-            onClick={onConfirm}
-            disabled={busy}
-            data-tooltip={busy ? "Please wait, this is still in progress" : undefined}
-          >
-            {busy && busyLabel ? busyLabel : confirmLabel}
-          </button>
+          {confirmButtonTone === "soft-green" ? (
+            <SoftGreenButton
+              onClick={onConfirm}
+              disabled={busy}
+              data-tooltip={busy ? "Please wait, this is still in progress" : undefined}
+            >
+              {busy && busyLabel ? busyLabel : confirmLabel}
+            </SoftGreenButton>
+          ) : (
+            <button
+              type="button"
+              className={tone === "danger" ? "primary-button confirm-dialog-danger" : "primary-button"}
+              onClick={onConfirm}
+              disabled={busy}
+              data-tooltip={busy ? "Please wait, this is still in progress" : undefined}
+            >
+              {busy && busyLabel ? busyLabel : confirmLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

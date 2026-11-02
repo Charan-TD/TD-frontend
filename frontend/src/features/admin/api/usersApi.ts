@@ -20,22 +20,27 @@ export const usersApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getUsers: builder.query<
       GetUsersResponse,
-      { search?: string; page?: number; limit?: number; status?: "all" | "blocked" }
+      { search?: string; page?: number; limit?: number; status?: "all" | "blocked" | "active" }
     >({
-      query: ({ page = 1, limit = 10, status = "all" }) => ({
+      query: ({ page = 1, limit = 10, status = "all", search = "" }) => ({
         url: USERS_PATH,
         method: "GET",
         params: {
           page,
           limit,
-          ...(status === "blocked" ? { status: "INACTIVE" } : {}),
+          ...(search.trim() ? { search: search.trim() } : {}),
+          ...(status !== "all" ? { status: status === "active" ? "ACTIVE" : "INACTIVE" } : {}),
         },
       }),
       transformResponse: (response: { success: boolean; data: CustomerUserList }) => {
         const data = response.data;
         const pagination = data?.pagination ?? { page: 1, limit: 10, total: 0, totalPages: 1 };
+        const users = (data?.customers ?? []).map((user) => {
+          const customerId = String(user.customer_id ?? user.id ?? "");
+          return { ...user, id: String(user.id ?? customerId), customer_id: customerId };
+        });
         return {
-          users: data?.customers ?? [],
+          users,
           pagination,
           hasMore: pagination.page < pagination.totalPages,
         };

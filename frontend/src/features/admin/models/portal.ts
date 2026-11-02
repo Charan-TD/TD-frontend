@@ -16,6 +16,8 @@ export type AdminProfile = {
   permissions: PermissionMap;
   /** Set once a real session is loaded. Empty for the signed-out guest profile. */
   employeeId?: string;
+  /** Profile picture from the signed-in employee, when one is uploaded. */
+  imageUrl?: string | null;
 };
 
 export type Metric = {

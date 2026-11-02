@@ -2,6 +2,8 @@
 
 import { AppShell } from "./components/AppShell";
 import { can } from "./models/access";
+import { navigationSubsections, type NavigationSectionId } from "./models/navigation";
+import type { PortalSection } from "./models/portal";
 import { DashboardView } from "./views/DashboardView";
 import { EditProfileView } from "./views/EditProfileView";
 import { LoginView } from "./views/LoginView";
@@ -15,7 +17,7 @@ import { AssignRoleView } from "../employees/views/AssignRoleView";
 
 // The dashboard greeting uses the signed-in employee's own name.
 const buildPageCopy = (employeeName: string) => ({
-  dashboard: { title: `Hello ${employeeName.trim() || "there"} 🤗`, subtitle: "Here’s a focused operational view of Train Dabba today." },
+  dashboard: { title: `Hello ${employeeName.trim() || "there"} `, subtitle: "Here’s a focused operational view of Train Dabba today." },
   management: { title: "Platform Operations", subtitle: "Live oversight of customers, fleet, vendors, and station hubs." },
   employees: { title: "Team & Access Control", subtitle: "Manage staff accounts, department roles, and administrative privileges." },
   "employee-details": { title: "Staff Profile", subtitle: "Review account information, assigned responsibilities, and status." },
@@ -30,6 +32,13 @@ export function App() {
   if (vm.screen === "login") return <LoginView onSignIn={vm.startSession} />;
   if (vm.screen === "edit-profile") return <EditProfileView admin={vm.admin} savedMessage={vm.savedMessage} onBack={() => vm.navigate("profile")} onSave={vm.saveProfile} />;
 
+  // Dashboard cards and list rows open the matching section.
+  const openSection = (section: PortalSection, subsectionId?: string) => {
+    if (section === "employees") return vm.navigate("employees");
+    const first = navigationSubsections[section as NavigationSectionId]?.[0];
+    vm.selectManagementService(first?.managementId ?? section, subsectionId ?? first?.id);
+  };
+
   const shellProps = {
     screen: vm.screen, admin: vm.admin, noticeOpen: vm.noticeOpen,
     selectedManagementId: vm.selectedManagementId, selectedSubsection: vm.selectedSubsection, managementOpen: vm.managementOpen,
@@ -38,15 +47,15 @@ export function App() {
     onQuickAddEmployee: () => vm.triggerQuickAction("add-employee"),
   };
 
-  if (vm.screen === "employees") return <AppShell title={pageCopy.employees.title} subtitle={pageCopy.employees.subtitle} {...shellProps}>{<EmployeesView permissions={vm.admin.permissions} onOpenDetails={vm.selectEmployee} onManageRoles={() => vm.navigate("assign-role")} autoOpenCreate={vm.pendingAction === "add-employee"} onAutoOpenHandled={vm.clearPendingAction} />}</AppShell>;
+  if (vm.screen === "employees") return <AppShell title={pageCopy.employees.title} subtitle={pageCopy.employees.subtitle} {...shellProps}>{<EmployeesView permissions={vm.admin.permissions} onOpenDetails={vm.selectEmployee} autoOpenCreate={vm.pendingAction === "add-employee"} onAutoOpenHandled={vm.clearPendingAction} />}</AppShell>;
   if (vm.screen === "employee-details" && vm.selectedEmployeeId) return <AppShell title={pageCopy["employee-details"].title} subtitle={pageCopy["employee-details"].subtitle} {...shellProps}>{<EmployeeDetailsView employeeId={vm.selectedEmployeeId} permissions={vm.admin.permissions} onBack={() => vm.navigate("employees")} onAssignRole={() => vm.navigate("assign-role")} />}</AppShell>;
   if (vm.screen === "employee-activity") return <AppShell title={pageCopy["employee-activity"].title} subtitle={pageCopy["employee-activity"].subtitle} {...shellProps}>{<EmployeeActivityView onBack={() => vm.navigate("employees")} />}</AppShell>;
   if (vm.screen === "assign-role") return <AppShell title={pageCopy["assign-role"].title} subtitle={pageCopy["assign-role"].subtitle} {...shellProps}>{<AssignRoleView permissions={vm.admin.permissions} onBack={() => vm.navigate("employees")} />}</AppShell>;
 
   const copy = pageCopy[vm.screen];
   return <AppShell title={copy.title} subtitle={copy.subtitle} {...shellProps}>
-    {vm.screen === "dashboard" && <DashboardView access={vm.admin.access} onNavigateManagement={() => vm.navigate("management")} />}
-    {vm.screen === "management" && <ManagementView selectedSubsection={vm.selectedSubsection} canUpdateUsers={can(vm.admin.permissions, "users", "update")} canAddRestaurantCategory={can(vm.admin.permissions, "restaurants", "insert")} stationAccess={{ insert: can(vm.admin.permissions, "stations", "insert"), update: can(vm.admin.permissions, "stations", "update") }} />}
+    {vm.screen === "dashboard" && <DashboardView access={vm.admin.access} onOpenSection={openSection} />}
+    {vm.screen === "management" && <ManagementView canAssignGroupOrders={can(vm.admin.permissions, "orders", "update")} onSelectSubsection={(subsection) => vm.selectManagementService(subsection.split("-")[0], subsection)} selectedSubsection={vm.selectedSubsection} canUpdateUsers={can(vm.admin.permissions, "users", "update")} canAddRestaurantCategory={can(vm.admin.permissions, "restaurants", "insert")} canBlockRestaurants={can(vm.admin.permissions, "restaurants", "delete")} canUnblockRestaurants={can(vm.admin.permissions, "restaurants", "update")} stationAccess={{ insert: can(vm.admin.permissions, "stations", "insert"), update: can(vm.admin.permissions, "stations", "update") }} />}
     {vm.screen === "profile" && <ProfileView admin={vm.admin} onEdit={() => vm.navigate("edit-profile")} />}
   </AppShell>;
 }
