@@ -231,7 +231,7 @@ export function AppShell({ title, screen, admin, noticeOpen, selectedSubsection,
     <aside className={`td-sidebar ${sidebarVm.mobileMenuOpen ? "is-mobile-open" : ""}`}>
       <div className="td-brand">
         <svg width="26" height="32" viewBox="0 0 26 32" aria-hidden="true"><path d="M13 0C5.8 0 0 5.6 0 12.6 0 22 13 32 13 32s13-10 13-19.4C26 5.6 20.2 0 13 0Z" fill="#fa8a1b"/><rect x="6.5" y="6.5" width="13" height="11" rx="2.6" fill="none" stroke="#fff" strokeWidth="1.8"/><path d="M6.5 12h13M10 20l-1.6 2.2M16 20l1.6 2.2" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/></svg>
-        <span><b>TRAIN</b><b>DABBA</b></span>
+        <span><b>TRAIN</b><b>DHABA</b></span>
       </div>
       <nav className="td-nav" aria-label="Main navigation">
         {sections.map((item) => {

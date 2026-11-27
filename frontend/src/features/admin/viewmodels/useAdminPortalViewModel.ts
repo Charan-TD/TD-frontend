@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { skipToken } from "@reduxjs/toolkit/query";
 
 import type { AdminProfile, Screen } from "../models/portal";
@@ -96,6 +97,7 @@ function buildAdminProfile(
 }
 
 export function useAdminPortalViewModel() {
+  const router = useRouter();
   const [screen, setScreen] = useState<Screen>("login");
 
   const [admin, setAdmin] = useState<AdminProfile>(
@@ -121,7 +123,10 @@ export function useAdminPortalViewModel() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Runs once after mount: reads browser-only storage so the server-rendered HTML and first client render match.
     setAccessToken(token);
 
-    if (!token) return;
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
 
     try {
       const employee = JSON.parse(localStorage.getItem("train_dabba_employee") || "null");
@@ -131,11 +136,12 @@ export function useAdminPortalViewModel() {
       if (employee?.id && permissions) {
         setAdmin(buildAdminProfile({ employee, role, permissions: normalizePermissionMap(permissions) }));
         setScreen("dashboard");
+        router.replace("/admin");
       }
     } catch {
       // Invalid stored JSON is ignored; /me or a new login will recover state.
     }
-  }, []);
+  }, [router]);
 
   // `currentData` (not `data`) is used on purpose: it is undefined until the
   // response for THIS token arrives, so a previous employee's cached profile
@@ -163,6 +169,7 @@ export function useAdminPortalViewModel() {
     setNoticeOpen(false);
     setSavedMessage("");
     setScreen("login");
+    router.replace("/login");
   };
 
   /** Called by the login form with the server's login response. */
@@ -170,6 +177,7 @@ export function useAdminPortalViewModel() {
     setAdmin(buildAdminProfile(session));
     setAccessToken(session.accessToken);
     setScreen("dashboard");
+    router.replace("/admin");
     window.scrollTo({ top: 0 });
   };
 
