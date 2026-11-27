@@ -1,4 +1,5 @@
 import Pagination from "@mui/material/Pagination";
+import { colors } from "@/app/theme/tokens";
 
 export function ListPagination({
   page,
@@ -34,16 +35,16 @@ export function ListPagination({
           minWidth: 40,
           height: 40,
           borderRadius: "9px",
-          color: "#38455c",
+          color: colors.inkSoft,
           fontFamily: "inherit",
           fontSize: 14,
         },
         "& .MuiPaginationItem-root.Mui-selected": {
-          border: "1px solid #1e293b",
-          color: "#fff",
-          backgroundColor: "#1e293b",
+          border: `1px solid ${colors.slate}`,
+          color: colors.surface,
+          backgroundColor: colors.slate,
         },
-        "& .MuiPaginationItem-root.Mui-selected:hover": { backgroundColor: "#29364a" },
+        "& .MuiPaginationItem-root.Mui-selected:hover": { backgroundColor: colors.slateHover },
         "& .MuiPaginationItem-root.Mui-disabled": { opacity: 0.45 },
       }}
     />

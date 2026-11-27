@@ -9,6 +9,15 @@ export type AdminCategory = {
   cat_img_url?: string | null;
 };
 
+/** The image URL may arrive under a few different keys; settle on cat_img_url. */
+const withImageUrl = (category: AdminCategory): AdminCategory => {
+  const raw = category as AdminCategory & Record<string, unknown>;
+  const url = [raw.cat_img_url, raw.cat_img_id, raw.category_img_url, raw.img_url, raw.image_url].find(
+    (value): value is string => typeof value === "string" && /^(https?:|data:|\/)/.test(value),
+  );
+  return { ...category, cat_img_url: url ?? null };
+};
+
 export const categoriesApi = baseApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
@@ -16,7 +25,8 @@ export const categoriesApi = baseApi.injectEndpoints({
       query: () => "/admin/categories",
       transformResponse: (response: { data?: AdminCategory[] | { categories?: AdminCategory[] } }) => {
         const data = response.data;
-        return Array.isArray(data) ? data : (data?.categories ?? []);
+        const list = Array.isArray(data) ? data : (data?.categories ?? []);
+        return list.map(withImageUrl);
       },
       providesTags: [{ type: "AdminCategory", id: "LIST" }],
     }),
@@ -27,7 +37,34 @@ export const categoriesApi = baseApi.injectEndpoints({
       transformResponse: (response: { data: AdminCategory }) => response.data,
       invalidatesTags: [{ type: "AdminCategory", id: "LIST" }],
     }),
+
+    /** PATCH /admin/categories/{id}: JSON { category_name } (max 150 characters). */
+    updateAdminCategory: builder.mutation<AdminCategory, { categoryId: string; categoryName: string }>({
+      query: ({ categoryId, categoryName }) => ({
+        url: `/admin/categories/${encodeURIComponent(categoryId)}`,
+        method: "PATCH",
+        body: { category_name: categoryName },
+      }),
+      transformResponse: (response: { data: AdminCategory }) => response.data,
+      invalidatesTags: [{ type: "AdminCategory", id: "LIST" }],
+    }),
+
+    /** PATCH /admin/categories/{id}/image: multipart with the new image in cat_img_id (JPG, PNG or WEBP, max 2 MB). */
+    updateAdminCategoryImage: builder.mutation<AdminCategory, { categoryId: string; body: FormData }>({
+      query: ({ categoryId, body }) => ({
+        url: `/admin/categories/${encodeURIComponent(categoryId)}/image`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: (response: { data: AdminCategory }) => response.data,
+      invalidatesTags: [{ type: "AdminCategory", id: "LIST" }],
+    }),
   }),
 });
 
-export const { useGetAdminCategoriesQuery, useCreateAdminCategoryMutation } = categoriesApi;
+export const {
+  useGetAdminCategoriesQuery,
+  useCreateAdminCategoryMutation,
+  useUpdateAdminCategoryMutation,
+  useUpdateAdminCategoryImageMutation,
+} = categoriesApi;

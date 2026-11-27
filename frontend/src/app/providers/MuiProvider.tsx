@@ -2,18 +2,24 @@
 
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import type { ReactNode } from "react";
+import { colors, legacyOranges } from "../theme/tokens";
 
 const theme = createTheme({
   palette: {
-    primary: { main: "#ff5a0a", dark: "#e84e00", light: "#fff1e8" },
-    success: { main: "#16834a", light: "#eaf7ef" },
-    error: { main: "#cf4141", light: "#fff0ef" },
-    text: { primary: "#202b3d", secondary: "#647089" },
-    divider: "#dfe4eb",
+    primary: {
+      main: legacyOranges.muiPrimary,
+      dark: legacyOranges.muiPrimaryDark,
+      light: legacyOranges.muiPrimaryLight,
+    },
+    success: { main: colors.success, light: colors.successWash },
+    error: { main: colors.danger, light: colors.dangerWash },
+    text: { primary: colors.ink, secondary: colors.muted },
+    divider: colors.line,
   },
+  // 10px is not on the radius scale (6/8/12/16); kept to avoid a visual change.
   shape: { borderRadius: 10 },
   typography: {
-    fontFamily: '"DM Sans", Arial, sans-serif',
+    fontFamily: "Barlow, system-ui, sans-serif",
     button: { fontSize: "14px", fontWeight: 600, textTransform: "none" },
   },
 });

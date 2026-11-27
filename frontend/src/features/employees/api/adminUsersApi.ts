@@ -30,14 +30,6 @@ type EmployeeRoleListResponse = {
   pagination: Pagination;
 };
 
-type RoleListResponse = {
-  roles: DbRole[];
-};
-
-type PermissionListResponse = {
-  permissions: DbPermission[];
-  pagination: Pagination;
-};
 
 function normalizeStatus(status?: string | null): EmployeeStatus {
   return status?.toLowerCase() === "inactive" ? "Inactive" : "Active";
@@ -102,7 +94,16 @@ function mapEmployee(
   };
 }
 
-async function loadRoles(baseQuery: any): Promise<RoleWithPermissions[]> {
+/** The `baseQuery` handed to an RTK Query `queryFn`, narrowed to what these loaders use. */
+type LoaderBaseQuery = (args: {
+  url: string;
+  method: string;
+  params?: Record<string, unknown>;
+}) => MaybePromise<{ data?: unknown; error?: unknown }>;
+
+type MaybePromise<T> = T | PromiseLike<T>;
+
+async function loadRoles(baseQuery: LoaderBaseQuery): Promise<RoleWithPermissions[]> {
   const response = await baseQuery({ url: "/roles", method: "GET" });
   if (response.error) return [];
   const data = response.data as { success?: boolean; data?: Array<DbRole & { permissions?: Array<{ permission_id: string; permission_name: string }> }> };
@@ -115,7 +116,7 @@ async function loadRoles(baseQuery: any): Promise<RoleWithPermissions[]> {
   }));
 }
 
-async function loadEmployeeRoles(baseQuery: any): Promise<EmployeeAssignment[]> {
+async function loadEmployeeRoles(baseQuery: LoaderBaseQuery): Promise<EmployeeAssignment[]> {
   const limit = 100;
   const fetchPage = async (page: number) => {
     const response = await baseQuery({

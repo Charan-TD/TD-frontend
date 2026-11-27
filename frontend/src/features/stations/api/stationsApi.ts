@@ -1,4 +1,5 @@
 import { baseApi } from "../../admin/api/baseApi";
+import { listTotal } from "../../admin/api/listTotal";
 
 export type Station = {
   id: string;
@@ -76,6 +77,13 @@ export const stationsApi = baseApi.injectEndpoints({
         : [{ type: "Station" as const, id: "LIST" }],
     }),
 
+    /** Total stations, read from the server's pagination (one row is fetched). */
+    getStationsTotal: builder.query<number, void>({
+      query: () => ({ url: "/stations", method: "GET", params: { page: 1, limit: 1 } }),
+      transformResponse: (response: unknown) => listTotal(response),
+      providesTags: [{ type: "Station" as const, id: "LIST" }],
+    }),
+
     createStation: builder.mutation<Station, StationInput>({
       query: (body) => ({ url: "/stations", method: "POST", body }),
       transformResponse: (response: StationResponse) => response.data,
@@ -97,6 +105,7 @@ export const stationsApi = baseApi.injectEndpoints({
 export const {
   useGetStationsQuery,
   useGetAllStationsQuery,
+  useGetStationsTotalQuery,
   useCreateStationMutation,
   useUpdateStationMutation,
 } = stationsApi;

@@ -1,5 +1,6 @@
 import { baseApi } from "../../admin/api/baseApi";
 import type { Pagination } from "../../admin/api/apiTypes";
+import { listTotal } from "../../admin/api/listTotal";
 
 export type Restaurant = {
   id: string;
@@ -15,6 +16,8 @@ export type Restaurant = {
   email: string | null;
   /** The restaurant's logo, when it has uploaded one. */
   logoUrl: string | null;
+  /** The raw list row, used to show details when the restaurant has no public ID to look up. */
+  record: Record<string, unknown>;
 };
 
 export type RestaurantList = {
@@ -45,6 +48,7 @@ function normalizeRestaurantPage(data: unknown): Restaurant[] {
     status: row.status == null ? null : String(row.status),
     onlineStatus: row.online_status == null ? null : String(row.online_status),
     rating: ratingOf(row.rating),
+    record: row,
   }));
 }
 
@@ -89,6 +93,7 @@ export const restaurantsApi = baseApi.injectEndpoints({
           status: row.status == null ? null : String(row.status),
           onlineStatus: row.online_status == null ? null : String(row.online_status),
           rating: ratingOf(row.rating),
+          record: row,
         }));
       },
       providesTags: (result) =>
@@ -124,10 +129,35 @@ export const restaurantsApi = baseApi.injectEndpoints({
         ? [...result.map((restaurant) => ({ type: "Restaurant" as const, id: restaurant.id })), { type: "Restaurant" as const, id: "LIST" }]
         : [{ type: "Restaurant" as const, id: "LIST" }],
     }),
+    /** One server page (GET /restaurants?page&limit&status) with the server's own totals. */
+    getRestaurantsPage: builder.query<{ rows: Restaurant[]; total: number; totalPages: number }, { page: number; limit: number; status?: string }>({
+      async queryFn({ page, limit, status }, _api, _extraOptions, baseQuery) {
+        const response = await baseQuery({ url: "/restaurants", method: "GET", params: { page, limit, ...(status ? { status } : {}) } });
+        if (response.error) return { error: response.error };
+        const data = (response.data as { data?: unknown } | undefined)?.data;
+        const rows = normalizeRestaurantPage(data);
+        const pagination = (data as { pagination?: { total?: number | string; totalPages?: number } } | undefined)?.pagination;
+        const total = Number(pagination?.total ?? rows.length);
+        return { data: { rows, total, totalPages: pagination?.totalPages ?? Math.max(1, Math.ceil(total / limit)) } };
+      },
+      providesTags: (result) => result
+        ? [...result.rows.map((restaurant) => ({ type: "Restaurant" as const, id: restaurant.id })), { type: "Restaurant" as const, id: "LIST" }]
+        : [{ type: "Restaurant" as const, id: "LIST" }],
+    }),
+    /** Total restaurants (optionally of one status), read from the server's pagination (one row is fetched). */
+    getRestaurantsTotal: builder.query<number, { status?: string } | void>({
+      query: (arg) => ({ url: "/restaurants", method: "GET", params: { page: 1, limit: 1, ...(arg?.status ? { status: arg.status } : {}) } }),
+      transformResponse: (response: unknown) => listTotal(response),
+      providesTags: [{ type: "Restaurant" as const, id: "LIST" }],
+    }),
     setRestaurantBlocked: builder.mutation<unknown, { id: string; blocked: boolean }>({
-      query: ({ id, blocked }) => blocked
-        ? { url: `/restaurants/${id}`, method: "DELETE" }
-        : { url: `/restaurants/${id}`, method: "PUT", body: { status: "ACTIVE" } },
+      // PATCH /admin/restaurants/{restaurant_id}/status sets the admin-side ACTIVE / INACTIVE switch and
+      // notifies the restaurant's app. It only works on approved restaurants (409 otherwise).
+      query: ({ id, blocked }) => ({
+        url: `/admin/restaurants/${encodeURIComponent(id)}/status`,
+        method: "PATCH",
+        body: { admin_restaurant_status: blocked ? "INACTIVE" : "ACTIVE" },
+      }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: "Restaurant", id },
         { type: "Restaurant", id: "LIST" },
@@ -136,4 +166,10 @@ export const restaurantsApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGetRestaurantsQuery, useGetAllRestaurantsQuery, useSetRestaurantBlockedMutation } = restaurantsApi;
+export const {
+  useGetRestaurantsQuery,
+  useGetAllRestaurantsQuery,
+  useGetRestaurantsPageQuery,
+  useGetRestaurantsTotalQuery,
+  useSetRestaurantBlockedMutation,
+} = restaurantsApi;

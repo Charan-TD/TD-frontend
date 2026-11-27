@@ -35,7 +35,7 @@ type CreateEmployeeFormInput = {
   permissionCode?: PermissionMatrix;
 };
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 export type EmployeeFilter = "all" | "active" | "inactive";
 
@@ -48,7 +48,6 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
     useState("");
 
   const searchTerm = query.trim().toLowerCase();
-  const isSearching = searchTerm.length > 0;
 
   const includeRoleMetadata =
     can(authPermissions, "employee_roles", "read") &&
@@ -59,7 +58,7 @@ export function useEmployeesViewModel(authPermissions: PermissionMap) {
   const allQuery = useGetEmployeesQuery({ all: true, includeRoleMetadata });
   const activeQuery = allQuery;
   const { isLoading, isFetching, isError, refetch } = activeQuery;
-  const allEmployees = activeQuery.data?.employees ?? [];
+  const allEmployees = useMemo(() => activeQuery.data?.employees ?? [], [activeQuery.data]);
 
   const matchingEmployees = useMemo(() => {
     const needle = searchTerm;

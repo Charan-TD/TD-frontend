@@ -10,6 +10,10 @@ export type Rider = {
   vehicle_type?: string | null;
   vehicle_number?: string | null;
   profile_image_url?: string | null;
+  aadhaar_number?: string | null;
+  aadhaar_verified?: boolean | null;
+  license_verified?: boolean | null;
+  created_at?: string | null;
 };
 
 export type CreateRiderInput = {
@@ -18,6 +22,8 @@ export type CreateRiderInput = {
   phone?: string;
   vehicle_type?: string;
   vehicle_number?: string;
+  /** ACTIVE or INACTIVE. A rider an admin adds is created ACTIVE so they can log in straight away. */
+  status?: "ACTIVE" | "INACTIVE";
 };
 
 type RiderList = {
@@ -52,6 +58,11 @@ export const ridersApi = baseApi.injectEndpoints({
       transformResponse: (response: { success: boolean; data: Rider }) => response.data,
       invalidatesTags: [{ type: "Rider", id: "LIST" }],
     }),
+    /** PATCH /delivery-partner-users/{id}/status with { status: "ACTIVE" | "INACTIVE" }. */
+    updateRiderStatus: builder.mutation<unknown, { id: string; status: "ACTIVE" | "INACTIVE" }>({
+      query: ({ id, status }) => ({ url: `/delivery-partner-users/${encodeURIComponent(id)}/status`, method: "PATCH", body: { status } }),
+      invalidatesTags: [{ type: "Rider", id: "LIST" }],
+    }),
     getAllRiders: builder.query<Rider[], void>({
       async queryFn(_arg, _api, _extraOptions, baseQuery) {
         const all: Rider[] = [];
@@ -79,4 +90,4 @@ export const ridersApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGetRidersQuery, useGetAllRidersQuery, useCreateRiderMutation } = ridersApi;
+export const { useGetRidersQuery, useGetAllRidersQuery, useCreateRiderMutation, useUpdateRiderStatusMutation } = ridersApi;

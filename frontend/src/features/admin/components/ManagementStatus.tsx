@@ -1,6 +1,7 @@
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import { formatStatusLabel } from "../models/formatStatusLabel";
+import { colors } from "@/app/theme/tokens";
 
 function statusTone(status: string | null | undefined): "positive" | "negative" | "pending" {
   const normalized = String(status ?? "").trim().toLowerCase().replace(/[_-]+/g, " ");
@@ -10,9 +11,9 @@ function statusTone(status: string | null | undefined): "positive" | "negative" 
 }
 
 const tones = {
-  positive: { color: "#16834a", background: "#eaf7ef" },
-  negative: { color: "#c93636", background: "#fff0ef" },
-  pending: { color: "#946200", background: "#fff6df" },
+  positive: { color: colors.success, background: colors.successWash },
+  negative: { color: colors.dangerStrong, background: colors.dangerWash },
+  pending: { color: colors.warning, background: colors.warningWash },
 };
 
 export function ManagementStatus({ status }: { status: string | null | undefined }) {

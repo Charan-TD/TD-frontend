@@ -1,26 +1,17 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { Icon } from "../../admin/components/Icon";
-import { ManagementActionButton } from "../../admin/components/ManagementActionButton";
-import { ManagementStatus } from "../../admin/components/ManagementStatus";
-import { TransientSuccessMessage } from "../../admin/components/TransientSuccessMessage";
-import { ListToolbar } from "../../admin/components/ListToolbar";
-import { RefreshButton } from "../../admin/components/RefreshButton";
-import { ListPagination } from "../../admin/components/ListPagination";
-import { StatusTabs } from "../../admin/components/StatusTabs";
-import { PrimaryActionButton } from "../../admin/components/PrimaryActionButton";
-import { SectionActions } from "../../admin/components/SectionActions";
-import { SoftGreenButton } from "../../admin/components/SoftGreenButton";
+import { PageFooter } from "../../admin/components/PageFooter";
+import { SectionActions, SectionSearch } from "../../admin/components/SectionActions";
 import { SidePanel } from "../../admin/components/SidePanel";
-import { RequiredFieldMark } from "../../admin/components/RequiredFieldMark";
 import { SkeletonTable } from "../../admin/components/Skeleton";
-import { UserAvatar } from "../../admin/components/UserAvatar";
+import { StatusSwitch } from "../../admin/components/StatusSwitch";
+import { StatusTabs } from "../../admin/components/StatusTabs";
+import { TransientSuccessMessage } from "../../admin/components/TransientSuccessMessage";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
-import { formatStatusLabel } from "../../admin/models/formatStatusLabel";
 import { StationLocationPicker, type PickedLocation } from "../components/StationLocationPicker";
-import { useGetAllOrdersQuery } from "../../orders/api/ordersApi";
 import {
   useCreateStationMutation,
   useGetAllStationsQuery,
@@ -30,35 +21,13 @@ import {
 } from "../api/stationsApi";
 
 type Props = {
-  /** One of stations-all or stations-performance. */
-  subsection: string;
   canInsert: boolean;
   canUpdate: boolean;
 };
 
-export function StationsView({ subsection, canInsert, canUpdate }: Props) {
-  const stationsQuery = useGetAllStationsQuery();
-
-  if (subsection === "stations-performance") {
-    return <StationPerformance query={stationsQuery} />;
-  }
-
-  return (
-    <StationList
-      query={stationsQuery}
-      canInsert={canInsert}
-      canUpdate={canUpdate}
-    />
-  );
+export function StationsView({ canInsert, canUpdate }: Props) {
+  return <StationList canInsert={canInsert} canUpdate={canUpdate} />;
 }
-
-type StationsQuery = {
-  data?: Station[];
-  isLoading: boolean;
-  isFetching: boolean;
-  isError: boolean;
-  refetch: () => unknown;
-};
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -67,6 +36,7 @@ type StationsQuery = {
 const NAME_MAX = 255;
 const CODE_MAX = 20;
 const PLACE_MAX = 100;
+const PAGE_SIZE = 10;
 
 type FormValues = {
   name: string;
@@ -134,33 +104,38 @@ const errorText = (error: unknown, fallback: string): string => {
 };
 
 const formatDate = (value?: string | null) => {
-  if (!value) return "-";
+  if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? "-"
-    : date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    ? "—"
+    : date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 };
 
+const initials = (station: Station) => (station.code?.trim() || station.name.trim().slice(0, 2)).toUpperCase();
+
+function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="td-menu-field">
+      <span>{label}<em> *</em></span>
+      {children}
+      {error ? <small className="td-field-error">{error}</small> : hint ? <small>{hint}</small> : null}
+    </label>
+  );
+}
+
 /* ------------------------------------------------------------------ */
-/* All Stations / Active Stations                                      */
+/* All stations                                                        */
 /* ------------------------------------------------------------------ */
 
-function StationList({
-  query,
-  canInsert,
-  canUpdate,
-}: {
-  query: StationsQuery;
-  canInsert: boolean;
-  canUpdate: boolean;
-}) {
-  const { data: stations = [], isLoading, isFetching, isError, refetch } = query;
+function StationList({ canInsert, canUpdate }: Props) {
+  const { data: stations = [], isLoading, isError } = useGetAllStationsQuery();
 
   const [createStation, { isLoading: isCreating }] = useCreateStationMutation();
   const [updateStation, { isLoading: isUpdating }] = useUpdateStationMutation();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StationFilter>("all");
+  const [page, setPage] = useState(1);
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Station | null>(null);
   const [values, setValues] = useState<FormValues>(emptyForm);
@@ -174,27 +149,15 @@ function StationList({
   const errors = validate(values);
   const hasErrors = Object.keys(errors).length > 0;
 
-  const activeStations = stations.filter(isStationActive);
-  const inactiveStations = stations.filter((station) => !isStationActive(station));
-  const inView = statusFilter === "active"
-    ? activeStations
-    : statusFilter === "inactive"
-      ? inactiveStations
-      : stations;
-
   const term = search.trim().toLowerCase();
-  const matching = term
-    ? inView.filter((station) =>
-        [station.name, station.code, station.city, station.state].some((value) =>
-          String(value ?? "").toLowerCase().includes(term),
-        ),
-      )
-    : inView;
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
-  const totalPages = Math.max(1, Math.ceil(matching.length / pageSize));
-  const pagedStations = matching.slice((page - 1) * pageSize, page * pageSize);
-  useEffect(() => setPage(1), [search, statusFilter]);
+  const scoped = term
+    ? stations.filter((station) => [station.name, station.code, station.city, station.state].some((value) => String(value ?? "").toLowerCase().includes(term)))
+    : stations;
+  const counts = { all: scoped.length, active: scoped.filter(isStationActive).length, inactive: scoped.filter((station) => !isStationActive(station)).length };
+  const filtered = scoped.filter((station) => statusFilter === "all" || (statusFilter === "active" ? isStationActive(station) : !isStationActive(station)));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const current = Math.min(page, totalPages);
+  const rows = filtered.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   const changes = useMemo(() => {
     if (!editing) return {};
@@ -233,20 +196,20 @@ function StationList({
   };
 
   const setField = (field: keyof FormValues, value: string) =>
-    setValues((current) => ({ ...current, [field]: field === "code" ? value.toUpperCase() : value }));
+    setValues((currentValues) => ({ ...currentValues, [field]: field === "code" ? value.toUpperCase() : value }));
 
   // Coordinates stay in the form state only; the admin just sees the map and address.
   const applyLocation = (location: PickedLocation) =>
-    setValues((current) => ({
-      ...current,
+    setValues((currentValues) => ({
+      ...currentValues,
       latitude: String(location.latitude),
       longitude: String(location.longitude),
-      city: location.city || current.city,
-      state: location.state || current.state,
+      city: location.city || currentValues.city,
+      state: location.state || currentValues.state,
     }));
 
   const saveBlocked = disabledReason(
-    [saving, `Saving the station\u2026`],
+    [saving, "Saving the station…"],
     [Boolean(editing) && Object.keys(changes).length === 0, "Change a field to save"],
   );
 
@@ -297,476 +260,114 @@ function StationList({
     }
   };
 
-  const columns = ["Station", "Code", "City", "State", "Status", "Added", "Action"];
-
+  const columns = ["Station", "City · State", "Restaurants", "Added", "Status"];
 
   return (
-    <section className="user-management-workspace">
-      <header className="employee-directory-header station-directory-header">
-        <StatusTabs
-          label="Filter stations by status"
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value as StationFilter)}
-          tabs={[
-            { id: "all", label: "All Stations", count: stations.length },
-            { id: "active", label: "Active", count: activeStations.length },
-            { id: "inactive", label: "Inactive / Blocked", count: inactiveStations.length },
-          ]}
-        />
-        <SectionActions>
-          <PrimaryActionButton
-            type="button"
-            onClick={openAdd}
-            disabled={!canInsert}
-            data-tooltip={canInsert ? undefined : noAccess("add stations")}
-            data-tooltip-kind="access"
-          >
-            Add station
-          </PrimaryActionButton>
-        </SectionActions>
-      </header>
+    <section className="td-page">
+      <SectionSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search station, code, city or state" />
+      <SectionActions>
+        <button type="button" className="td-btn td-btn--primary" onClick={openAdd} disabled={!canInsert} data-tooltip={canInsert ? undefined : noAccess("add stations")} data-tooltip-kind="access">
+          <Icon name="plus" size={14} />Add station
+        </button>
+      </SectionActions>
 
       <TransientSuccessMessage message={savedMessage} />
-      {actionError && <div className="api-state api-state--error">{actionError}</div>}
+      {actionError && <div className="api-state api-state--error" role="alert">{actionError}</div>}
+      {isError && <div className="api-state api-state--error" role="alert">Unable to load stations. Check the API connection and try again.</div>}
 
-      <ListToolbar value={search} onChange={setSearch} placeholder="Search by station, code, city or state" label="the stations" refreshing={isFetching} onRefresh={() => refetch()} />
-
-      {isError && (
-        <div className="api-state api-state--error">
-          Unable to load stations. Check the API connection and try again.
+      <div className="td-table-card">
+        <div className="td-table-card-head td-table-card-head--end">
+          <StatusTabs placement="inline" label="Filter stations by status" value={statusFilter} onChange={(value) => { setStatusFilter(value as StationFilter); setPage(1); }}
+            tabs={[{ id: "all", label: "All stations", count: counts.all }, { id: "active", label: "Active", count: counts.active }, { id: "inactive", label: "Inactive", count: counts.inactive }]} />
         </div>
-      )}
 
-      {isLoading && !isError && <SkeletonTable columns={columns} />}
+        {isLoading && !isError && <SkeletonTable columns={columns} />}
 
-      {!isLoading && !isError && (
-        <div className="user-table-wrap">
-          <table className="user-table">
-            <thead>
-              <tr>
-                {columns.map((column) => (
-                  <th key={column}>{column}</th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {pagedStations.map((station) => (
-                <tr key={station.id}>
-                  <td>
-                    <div className="restaurant-cell">
-                      <UserAvatar name={station.name} size="medium" />
-                      <div>
-                        <strong>{station.name}</strong>
-                      </div>
-                    </div>
-                  </td>
-                  <td>{station.code ?? "-"}</td>
-                  <td>{station.city ?? "-"}</td>
-                  <td>{station.state ?? "-"}</td>
-                  <td>
-                    <span className={`status-pill ${isStationActive(station) ? "status-pill--live" : ""}`}>
-                      <i />
-                      {isStationActive(station) ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-
-                  <td>{formatDate(station.created_at)}</td>
-                  <td>
-                        <ManagementActionButton
-                          action="edit"
-                          ariaLabel={`Edit ${station.name}`}
-                          onClick={() => openEdit(station)}
-                          disabled={!canUpdate}
-                          tooltip={!canUpdate ? noAccess("edit stations") : undefined}
-                          tooltipKind={!canUpdate ? "access" : undefined}
-                        />
-                        <ManagementActionButton
-                          action={isStationActive(station) ? "deactivate" : "activate"}
-                          stateIndicator={isStationActive(station) ? "active" : "blocked"}
-                          ariaLabel={`${isStationActive(station) ? "Deactivate" : "Activate"} ${station.name}`}
-                          onClick={() => toggleStatus(station)}
-                          disabled={!canUpdate || togglingId === station.id}
-                          tooltip={!canUpdate ? noAccess("change station status") : togglingId === station.id ? "Please wait, the station is being updated" : undefined}
-                          tooltipKind={!canUpdate ? "access" : undefined}
-                        />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {!matching.length && (
-            <div className="api-state">
-              {inView.length ? `No stations match "${search.trim()}".` : "No stations in this status."}
+        {!isLoading && !isError && (
+          <>
+            <div className="td-table-scroll">
+              <table className="td-table">
+                <thead>
+                  <tr>
+                    {columns.map((column) => <th key={column}>{column}</th>)}
+                    <th><span className="td-sr">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((station) => {
+                    const active = isStationActive(station);
+                    return (
+                      <tr key={station.id}>
+                        <td><div className="td-st-name"><span className="td-st-code">{initials(station)}</span>{station.name}</div></td>
+                        <td><div className="td-contact"><span>{station.city ?? "—"}</span><small>{station.state ?? ""}</small></div></td>
+                        {/* The station API does not return how many restaurants are linked. */}
+                        <td className="td-faint">—</td>
+                        <td className="td-muted">{formatDate(station.created_at)}</td>
+                        <td>
+                          <StatusSwitch checked={active} onLabel="On" offLabel="Off" label={`${active ? "Turn off" : "Turn on"} ${station.name}`}
+                            disabled={!canUpdate || togglingId === station.id} tooltip={!canUpdate ? noAccess("change station status") : undefined} tooltipKind={!canUpdate ? "access" : undefined}
+                            onChange={() => void toggleStatus(station)} />
+                        </td>
+                        <td className="td-th-right">
+                          <button type="button" className="td-icon-btn" aria-label={`Edit ${station.name}`} onClick={() => openEdit(station)} disabled={!canUpdate}
+                            data-tooltip={!canUpdate ? noAccess("edit stations") : undefined} data-tooltip-kind={!canUpdate ? "access" : undefined}><Icon name="edit" size={14} /></button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!rows.length && <div className="api-state">{term ? `No stations match "${search.trim()}".` : "No stations in this status."}</div>}
             </div>
-          )}
-        </div>
-      )}
-
-      {!isLoading && !isError && matching.length > 0 && <ListPagination page={page} count={totalPages} onChange={setPage} disabled={isFetching} />}
+            {filtered.length > 0 && <PageFooter page={current} totalPages={totalPages} total={filtered.length} pageSize={PAGE_SIZE} shown={rows.length} noun="stations" onChange={setPage} />}
+          </>
+        )}
+      </div>
 
       <SidePanel
         open={panelOpen}
         onClose={closePanel}
-        eyebrow="STATION"
         title={editing ? "Edit station" : "Add station"}
-        description={editing ? "Update the station details." : "Create a new railway station."}
+        description={editing ? "Update the station details." : "Restaurants can be linked to this station once it’s added."}
         closeDisabled={saving}
+        footer={(
+          <>
+            <button type="button" className="td-btn td-btn--small" onClick={closePanel} disabled={saving}>Cancel</button>
+            <button type="button" className="td-btn td-btn--primary td-btn--small" onClick={() => void submit()} disabled={Boolean(saveBlocked)} data-tooltip={saveBlocked}>
+              {saving ? "Saving…" : editing ? "Save changes" : "Add station"}
+            </button>
+          </>
+        )}
       >
-        <div className="form-grid">
-          <label>
-            <span>Station name<RequiredFieldMark /></span>
-            <input
-              value={values.name}
-              onChange={(event) => setField("name", event.target.value)}
-              placeholder="e.g. Secunderabad Junction"
-              maxLength={NAME_MAX}
-              disabled={saving}
-              required
-            />
-            {showErrors && errors.name && <small className="field-error" role="alert">{errors.name}</small>}
-          </label>
+        <div className="td-st-form">
+          {formError && <div className="api-state api-state--error" role="alert">{formError}</div>}
 
-          <label>
-            <span>Station code<RequiredFieldMark /></span>
-            <input
-              value={values.code}
-              onChange={(event) => setField("code", event.target.value)}
-              placeholder="e.g. SC"
-              maxLength={CODE_MAX}
-              disabled={saving}
-              required
-            />
-            {showErrors && errors.code ? (
-              <small className="field-error" role="alert">{errors.code}</small>
-            ) : (
-              <small>Saved in capitals. Each code must be unique.</small>
-            )}
-          </label>
-
-          <label>
-            <span>City<RequiredFieldMark /></span>
-            <input
-              value={values.city}
-              onChange={(event) => setField("city", event.target.value)}
-              placeholder="e.g. Hyderabad"
-              maxLength={PLACE_MAX}
-              disabled={saving}
-              required
-            />
-            {showErrors && errors.city && <small className="field-error" role="alert">{errors.city}</small>}
-          </label>
-
-          <label>
-            <span>State<RequiredFieldMark /></span>
-            <input
-              value={values.state}
-              onChange={(event) => setField("state", event.target.value)}
-              placeholder="e.g. Telangana"
-              maxLength={PLACE_MAX}
-              disabled={saving}
-              required
-            />
-            {showErrors && errors.state && <small className="field-error" role="alert">{errors.state}</small>}
-          </label>
-
-          <label>
-            <span>Status</span>
-            <select
-              value={values.status}
-              onChange={(event) => setValues((current) => ({ ...current, status: event.target.value as FormValues["status"] }))}
-              disabled={saving}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            <small>Inactive stations are hidden from customers.</small>
-          </label>
-
-          <div className="station-picker-slot">
-            <StationLocationPicker
-              latitude={values.latitude}
-              longitude={values.longitude}
-              onChange={applyLocation}
-              disabled={saving}
-            />
+          <div className="td-st-row">
+            <Field label="Station name" error={showErrors ? errors.name : undefined}>
+              <input value={values.name} onChange={(event) => setField("name", event.target.value)} placeholder="e.g. Secunderabad Junction" maxLength={NAME_MAX} disabled={saving} />
+            </Field>
+            <Field label="Station code" error={showErrors ? errors.code : undefined} hint="Capital letters, must be unique">
+              <input value={values.code} onChange={(event) => setField("code", event.target.value)} placeholder="E.G. SC" maxLength={CODE_MAX} disabled={saving} />
+            </Field>
           </div>
-        </div>
+          <div className="td-st-row">
+            <Field label="City" error={showErrors ? errors.city : undefined}>
+              <input value={values.city} onChange={(event) => setField("city", event.target.value)} placeholder="e.g. Hyderabad" maxLength={PLACE_MAX} disabled={saving} />
+            </Field>
+            <Field label="State" error={showErrors ? errors.state : undefined}>
+              <input value={values.state} onChange={(event) => setField("state", event.target.value)} placeholder="e.g. Telangana" maxLength={PLACE_MAX} disabled={saving} />
+            </Field>
+          </div>
 
-        {formError && <div className="api-state api-state--error">{formError}</div>}
+          <div className="td-st-status">
+            <div><b>Status</b><small>Off stations are hidden from customers</small></div>
+            <StatusSwitch checked={values.status === "active"} onLabel="On" offLabel="Off" label="Station status" disabled={saving}
+              onChange={(next) => setValues((currentValues) => ({ ...currentValues, status: next ? "active" : "inactive" }))} />
+          </div>
 
-        <div className="assign-role-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={closePanel}
-            disabled={saving}
-            data-tooltip={saving ? "Please wait, the station is being saved" : undefined}
-          >
-            Cancel
-          </button>
-
-          {editing ? <SoftGreenButton
-            type="button"
-            onClick={submit}
-            disabled={Boolean(saveBlocked)}
-            data-tooltip={saveBlocked}
-          >
-            {saving ? "Saving\u2026" : "Save changes"}
-          </SoftGreenButton> : <PrimaryActionButton
-            type="button"
-            onClick={submit}
-            disabled={Boolean(saveBlocked)}
-            data-tooltip={saveBlocked}
-          >
-            {saving ? "Saving\u2026" : "Add station"}
-          </PrimaryActionButton>}
+          <StationLocationPicker latitude={values.latitude} longitude={values.longitude} onChange={applyLocation} disabled={saving} />
         </div>
       </SidePanel>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Station Performance                                                 */
-/* ------------------------------------------------------------------ */
-
-const IN_PROGRESS = ["PENDING_PAYMENT", "PLACED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING_PAYMENT: "Pending payment",
-  PLACED: "Placed",
-  CONFIRMED: "Confirmed",
-  PREPARING: "Preparing",
-  READY: "Ready",
-  OUT_FOR_DELIVERY: "Out for delivery",
-  DELIVERED: "Delivered",
-  CANCELLED: "Cancelled",
-};
-
-const rupees = (value: number) => `\u20B9${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-
-/** Performance of one station: pick a station, see its orders and how they are going. */
-function StationPerformance({ query }: { query: StationsQuery }) {
-  const { data: stations = [], isLoading, isFetching, isError, refetch } = query;
-  const ordersQuery = useGetAllOrdersQuery();
-
-  const [selectedId, setSelectedId] = useState("");
-
-  const sorted = useMemo(
-    () => [...stations].sort((a, b) => a.name.localeCompare(b.name)),
-    [stations],
-  );
-  const station = sorted.find((item) => item.id === selectedId) ?? sorted[0] ?? null;
-
-  const figures = useMemo(() => {
-    if (!station) return null;
-    const code = station.code?.trim().toUpperCase();
-    const orders = (ordersQuery.data ?? []).filter((order) =>
-      order.delivery_station_code
-        ? order.delivery_station_code.trim().toUpperCase() === code
-        : (order.delivery_station_id ?? order.boarding_station_id) === station.id,
-    );
-
-    const byStatus = new Map<string, number>();
-    let revenue = 0;
-    let delivered = 0;
-    let cancelled = 0;
-    let inProgress = 0;
-
-    orders.forEach((order) => {
-      const status = String(order.status ?? "UNKNOWN").toUpperCase();
-      byStatus.set(status, (byStatus.get(status) ?? 0) + 1);
-      if (status === "DELIVERED") {
-        delivered += 1;
-        revenue += Number(order.total) || 0;
-      } else if (status === "CANCELLED") {
-        cancelled += 1;
-      } else if (IN_PROGRESS.includes(status)) {
-        inProgress += 1;
-      }
-    });
-
-    const recent = [...orders]
-      .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
-      .slice(0, 8);
-
-    return {
-      total: orders.length,
-      delivered,
-      cancelled,
-      inProgress,
-      revenue,
-      average: delivered ? revenue / delivered : 0,
-      cancelRate: orders.length ? Math.round((cancelled / orders.length) * 100) : 0,
-      statuses: Array.from(byStatus.entries()).sort((a, b) => b[1] - a[1]),
-      recent,
-    };
-  }, [station, ordersQuery.data]);
-
-  const loadingOrders = ordersQuery.isLoading;
-  const show = (value: string) => (loadingOrders || ordersQuery.isError ? "-" : value);
-
-  const stats = figures
-    ? [
-        { id: "delivered", label: "Delivered", note: "Completed orders", value: show(String(figures.delivered)) },
-        { id: "progress", label: "In progress", note: "Placed up to out for delivery", value: show(String(figures.inProgress)) },
-        { id: "cancelled", label: "Cancelled", note: `${figures.cancelRate}% of orders`, value: show(String(figures.cancelled)) },
-        { id: "revenue", label: "Revenue", note: "From delivered orders", value: show(rupees(figures.revenue)) },
-        { id: "average", label: "Avg. order value", note: "Per delivered order", value: show(figures.delivered ? rupees(figures.average) : "-") },
-      ]
-    : [];
-
-  return (
-    <section className="user-management-workspace">
-      {isError && (
-        <div className="station-perf-error-row">
-          <div className="api-state api-state--error">
-            Unable to load stations. Check the API connection and try again.
-          </div>
-          <RefreshButton
-            refreshing={isFetching || ordersQuery.isFetching}
-            label="the station figures"
-            onRefresh={() => {
-              refetch();
-              ordersQuery.refetch();
-            }}
-          />
-        </div>
-      )}
-
-      {!isError && (
-        <div className="station-perf-picker">
-          <label>
-            <span>Station</span>
-            <select
-              value={station?.id ?? ""}
-              onChange={(event) => setSelectedId(event.target.value)}
-              disabled={isLoading || !sorted.length}
-            >
-              {isLoading && <option>Loading stations\u2026</option>}
-              {!isLoading && !sorted.length && <option>No stations yet</option>}
-              {sorted.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {item.code ? ` (${item.code})` : ""}
-                  {item.city ? ` \u2014 ${item.city}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {station && (
-            <div className="station-perf-meta">
-              <span>
-                {[station.city, station.state].filter(Boolean).join(", ") || "Location not set"}
-              </span>
-              <ManagementStatus status={isStationActive(station) ? "Active" : "Inactive"} />
-              <span>Added {formatDate(station.created_at)}</span>
-            </div>
-          )}
-
-          <RefreshButton
-            refreshing={isFetching || ordersQuery.isFetching}
-            label="the station figures"
-            onRefresh={() => {
-              refetch();
-              ordersQuery.refetch();
-            }}
-          />
-        </div>
-      )}
-
-      {station && ordersQuery.isError && (
-        <div className="api-state api-state--error">
-          Unable to load orders, so the figures below are not available. Check the API connection and try again.
-        </div>
-      )}
-
-      {station && (
-        <>
-          {figures && (
-            <article className="station-perf-summary">
-              <div className="station-perf-summary__lead">
-                <span className="user-activity-icon tone-saffron">
-                  <Icon name="bag" size={19} />
-                </span>
-                <p>Total orders</p>
-                <strong>{show(String(figures.total))}</strong>
-                <small>All orders for this station</small>
-              </div>
-
-              <dl className="station-perf-summary__stats">
-                {stats.map((stat) => (
-                  <div key={stat.id}>
-                    <dt>{stat.label}</dt>
-                    <dd>{stat.value}</dd>
-                    <small>{stat.note}</small>
-                  </div>
-                ))}
-              </dl>
-            </article>
-          )}
-
-          {figures && !loadingOrders && !ordersQuery.isError && (
-            <div className="station-perf-panels">
-              <section className="station-perf-panel">
-                <h3 className="station-perf-heading">Orders by status</h3>
-                {figures.statuses.length ? (
-                  <ul className="station-perf-bars">
-                    {figures.statuses.map(([status, count]) => (
-                      <li key={status}>
-                        <span>{STATUS_LABELS[status] ?? status}</span>
-                        <div className="station-perf-bar">
-                          <i style={{ width: `${Math.round((count / figures.total) * 100)}%` }} />
-                        </div>
-                        <strong>{count}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="api-state station-perf-empty">No orders for this station yet.</div>
-                )}
-              </section>
-
-              <section className="station-perf-panel station-perf-panel--orders">
-                <h3 className="station-perf-heading">Recent orders</h3>
-                {figures.recent.length ? (
-                  <div className="station-perf-table-wrap">
-                    <table className="user-table station-perf-orders-table">
-                      <thead>
-                        <tr>
-                          <th>Order</th>
-                          <th>Status</th>
-                          <th>Total</th>
-                          <th>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {figures.recent.map((order) => (
-                          <tr key={order.id}>
-                            <td>{order.order_number ?? order.id.slice(0, 8)}</td>
-                            <td>{formatStatusLabel(order.status_label ?? STATUS_LABELS[String(order.status).toUpperCase()] ?? order.status)}</td>
-                            <td>{order.total == null ? "-" : rupees(Number(order.total) || 0)}</td>
-                            <td>{formatDate(order.journey_date ?? order.created_at)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="api-state station-perf-empty">No orders for this station yet.</div>
-                )}
-              </section>
-            </div>
-          )}
-
-          <small className="station-perf-note">
-            Orders are matched to the station they are delivered at.
-          </small>
-        </>
-      )}
     </section>
   );
 }

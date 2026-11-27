@@ -46,12 +46,12 @@ const FIELD_LABELS: Record<string, string> = {
 
 const DOCUMENT_FIELDS = new Set(["pan_card", "adhaar_card", "gst_document"]);
 
-const labelFor = (key: string) =>
+export const labelFor = (key: string) =>
   FIELD_LABELS[key] ?? key.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 const isUrl = (value: unknown): value is string => typeof value === "string" && /^https?:\/\//i.test(value);
 
-function Value({ field, value }: { field: string; value: unknown }) {
+export function Value({ field, value }: { field: string; value: unknown }) {
   if (isUrl(value)) {
     return (
       <a href={value} target="_blank" rel="noopener noreferrer">

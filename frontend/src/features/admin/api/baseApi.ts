@@ -12,7 +12,7 @@ export const API_BASE_URL =
 
 const ACCESS_TOKEN_KEY = "train_dabba_access_token";
 
-/** Fired when the API rejects the login (e.g. it expired); the portal signs out. */
+/** Fired when the API answers 401 on a signed-in request; a toast asks the person to sign in again. */
 export const SESSION_EXPIRED_EVENT = "train-dabba:session-expired";
 
 /** sessionStorage key holding which request caused the last sign-out, so the sign-in screen can show it. */
@@ -42,9 +42,9 @@ const isLoginRequest = (args: string | FetchArgs) =>
   (typeof args === "string" ? args : args.url).includes("/auth/employee/login");
 
 /**
- * Login tokens expire on the backend's schedule. When a request comes back
- * 401 the session is over, so announce SESSION_EXPIRED_EVENT and let the
- * portal return to the sign-in screen instead of leaving every page broken.
+ * When a request comes back 401, announce SESSION_EXPIRED_EVENT so a toast asks
+ * the person to log out and in again. They are NOT signed out automatically:
+ * the backend has no token refresh yet, and an auto sign-out hid real backend 401s.
  * (403 means "not allowed", not "expired", so it is passed through.)
  */
 const baseQueryWithSessionCheck: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
@@ -55,16 +55,10 @@ const baseQueryWithSessionCheck: BaseQueryFn<string | FetchArgs, unknown, FetchB
   const result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error?.status === 401 && !isLoginRequest(args) && typeof window !== "undefined") {
-    // Record which request was rejected and why, so a surprise sign-out can be traced.
+    // Log which request was rejected and why, so a backend 401 can be traced.
     const request = typeof args === "string" ? { method: "GET", url: args } : { method: args.method ?? "GET", url: args.url };
     const reason = (result.error.data as { message?: string } | undefined)?.message ?? "no message";
-    const detail = `${request.method} ${request.url} returned 401: ${reason}`;
-    console.warn("[auth] Signed out after a rejected request —", detail);
-    try {
-      sessionStorage.setItem(LAST_401_KEY, detail);
-    } catch {
-      // Storage can be unavailable (private mode); the console line above still has it.
-    }
+    console.warn("[auth] Request rejected with 401 —", `${request.method} ${request.url}: ${reason}`);
     window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
   }
 
@@ -91,6 +85,10 @@ export const baseApi = createApi({
     "Employee",
     "Role",
     "Permission",
+    "RecommendedMenu",
+    "ReviewReply",
+    "Rating",
+    "QtyType",
   ],
 
   endpoints: () => ({}),

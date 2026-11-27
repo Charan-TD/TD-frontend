@@ -9,8 +9,7 @@ import {
   useEmployeeMeQuery,
   type EmployeeMeData,
 } from "../api/authApi";
-import { baseApi, SESSION_EXPIRED_EVENT } from "../api/baseApi";
-import { SESSION_EXPIRED_NOTE_KEY } from "./loginViewModel";
+import { baseApi } from "../api/baseApi";
 import { clearAuthSession } from "../authSlice";
 import { store } from "../store";
 import {
@@ -119,6 +118,7 @@ export function useAdminPortalViewModel() {
 
   useEffect(() => {
     const token = localStorage.getItem("train_dabba_access_token");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Runs once after mount: reads browser-only storage so the server-rendered HTML and first client render match.
     setAccessToken(token);
 
     if (!token) return;
@@ -147,6 +147,10 @@ export function useAdminPortalViewModel() {
     error: sessionError,
   } = useEmployeeMeQuery(accessToken ?? skipToken);
 
+  const [pendingAction, setPendingAction] = useState<
+    "add-employee" | null
+  >(null);
+
   const logout = () => {
     STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
     store.dispatch(clearAuthSession());
@@ -174,30 +178,20 @@ export function useAdminPortalViewModel() {
     if (!accessToken || !employeeSession?.data) return;
 
     // Always take the freshest permissions the server reports.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Runs once after mount: reads browser-only storage so the server-rendered HTML and first client render match.
     setAdmin((current) => buildAdminProfile(employeeSession.data, current));
     setScreen((current) => (current === "login" ? "dashboard" : current));
   }, [employeeSession, accessToken]);
 
-  // The API rejected the login (it expired): back to the sign-in screen.
-  useEffect(() => {
-    const onExpired = () => {
-      // Only meaningful while signed in; the login screen reads this note.
-      if (!localStorage.getItem("train_dabba_access_token")) return;
-      sessionStorage.setItem(SESSION_EXPIRED_NOTE_KEY, "1");
-      logout();
-    };
-    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
-    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Only an authentication failure ends the session; a network blip does not.
+  // A 401 no longer signs the person out: SessionExpiredToast asks them to sign in again.
+  // Only a 403 on the profile check (account not allowed) ends the session; a network blip does not.
   useEffect(() => {
     if (!accessToken || !isSessionError) return;
 
     const status = (sessionError as { status?: unknown } | undefined)?.status;
-    if (status === 401 || status === 403) logout();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Runs once after mount: reads browser-only storage so the server-rendered HTML and first client render match.
+    if (status === 403) logout();
+     
   }, [accessToken, isSessionError, sessionError]);
 
   const navigate = (next: Screen) => {
@@ -223,10 +217,6 @@ export function useAdminPortalViewModel() {
       behavior: "smooth",
     });
   };
-
-  const [pendingAction, setPendingAction] = useState<
-    "add-employee" | null
-  >(null);
 
   const triggerQuickAction = (action: "add-employee") => {
     if (

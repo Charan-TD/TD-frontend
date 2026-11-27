@@ -4,6 +4,7 @@ import { Icon } from "./Icon";
 import Box from "@mui/material/Box";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
+import { colors } from "@/app/theme/tokens";
 
 export type ChartRange = "7d" | "30d" | "6m";
 
@@ -32,16 +33,16 @@ export function ChartRangeSelect({ value, onChange }: { value: ChartRange; onCha
         maxWidth: "100%",
         height: 42,
         borderRadius: "9px",
-        backgroundColor: "#fff",
-        color: "#38455c",
+        backgroundColor: colors.surface,
+        color: colors.inkSoft,
         fontFamily: "inherit",
         fontSize: 14,
         "& .MuiSelect-select": { py: 1, pl: 1.5, pr: "36px !important" },
-        "& .MuiOutlinedInput-notchedOutline": { borderColor: "#dfe4eb" },
-        "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#b9c2d0" },
-        "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#ee5b00", borderWidth: 1 },
+        "& .MuiOutlinedInput-notchedOutline": { borderColor: colors.line },
+        "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: colors.lineStrong },
+        "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: colors.orange, borderWidth: 1 },
         "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(238, 91, 0, .08)" },
-        "& .MuiSelect-icon": { display: "flex", alignItems: "center", right: 12, top: "calc(50% - 8px)", color: "#647089", pointerEvents: "none" },
+        "& .MuiSelect-icon": { display: "flex", alignItems: "center", right: 12, top: "calc(50% - 8px)", color: colors.muted, pointerEvents: "none" },
       }}
       MenuProps={{
         anchorOrigin: { vertical: "bottom", horizontal: "right" },
@@ -52,9 +53,9 @@ export function ChartRangeSelect({ value, onChange }: { value: ChartRange; onCha
       {ranges.map((range) => (
         <MenuItem key={range.value} value={range.value} sx={{
           display: "flex", justifyContent: "space-between", gap: 3, minHeight: 42,
-          px: 1.5, my: 0.25, borderRadius: "7px", fontFamily: "inherit", fontSize: 14, color: "#38455c",
+          px: 1.5, my: 0.25, borderRadius: "7px", fontFamily: "inherit", fontSize: 14, color: colors.inkSoft,
           "&:hover": { backgroundColor: "#f5f7fa" },
-          "&.Mui-selected, &.Mui-selected:hover": { color: "#c94c00", backgroundColor: "#fff0e6", fontWeight: 600 },
+          "&.Mui-selected, &.Mui-selected:hover": { color: colors.orangeDeep, backgroundColor: colors.orangeWash, fontWeight: 600 },
         }}>
           {range.label}
           {range.value === value && <Icon name="check" size={16} />}

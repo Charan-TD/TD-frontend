@@ -21,6 +21,20 @@
   --violet: #8e6cc9;
   --violet-wash: #f3edff;
   --shadow: 0 16px 42px rgba(32, 41, 74, .07);
+
+  /* Spacing scale. Mirrored in src/app/theme/tokens.ts; the brand orange
+     and radius scale (--radius-1..4) are defined in the last :root block of
+     this file. tests/design-tokens.test.cjs fails if CSS and tokens drift. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Breakpoints for NEW rules (CSS variables cannot be used inside @media):
+     sm 560px, md 760px, lg 900px, xl 1100px. See tokens.ts `breakpoints`. */
 }
 
 * {
@@ -2734,14 +2748,16 @@ td>strong {
 .group-menu__count { padding: 2px 10px; border-radius: 999px; background: #f2f4f7; color: #667085; font-size: 12px; font-weight: 600; }
 .form-grid .group-menu__search { height: 38px; font-size: 13px; }
 .group-menu__list { display: grid; gap: 6px; max-height: 340px; overflow-y: auto; padding-right: 2px; }
-.group-menu__item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid #edf0f4; border-radius: 10px; }
+.group-menu__item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px 12px; padding: 12px 10px; border: 1px solid #edf0f4; border-radius: 10px; }
 .group-menu__item--selected { border-color: var(--orange); background: var(--orange-wash); }
-.group-menu__info { display: grid; min-width: 0; }
-.group-menu__info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; text-transform: capitalize; }
-.group-menu__info span { font-size: 12px; color: #667085; text-transform: capitalize; }
+.group-menu__details { display: flex; grid-column: 1 / -1; align-items: flex-start; gap: 12px; min-width: 0; }
+.group-menu__details > .avatar { flex-shrink: 0; }
+.group-menu__info { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.group-menu__info strong { white-space: normal; overflow-wrap: anywhere; line-height: 1.45; font-size: 14px; text-transform: capitalize; }
+.group-menu__info span { overflow-wrap: anywhere; font-size: 12px; color: #667085; text-transform: capitalize; }
 .group-menu__item--out { background: #f9fafb; }
 .group-menu__item--out .group-menu__info, .group-menu__item--out .group-menu__price { opacity: .55; }
-.group-menu__stock { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.group-menu__stock { justify-self: start; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .group-menu__stock--in { background: #e8f6ee; color: #1f7a4a; }
 .group-menu__stock--out { background: #fdecec; color: #c62828; }
 .group-menu__price { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -9968,3 +9984,28 @@ a.review-doc:hover {
 .riders-banner span:not(.riders-banner__icon) { color: var(--muted); font-size: 13px; }
 .riders-banner--own { border-left-color: var(--indigo); background: var(--indigo-wash); }
 .riders-banner--own .riders-banner__icon { color: var(--indigo); }
+
+/* Indian phone input: fixed +91 prefix beside the number field */
+.phone-input {
+  display: flex;
+  align-items: stretch;
+}
+
+.phone-input__code {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid #e2e5ed;
+  border-right: 0;
+  border-radius: 9px 0 0 9px;
+  color: #38455c;
+  background: #f6f7fa;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.phone-input input {
+  min-width: 0;
+  flex: 1;
+  border-radius: 0 9px 9px 0 !important;
+}

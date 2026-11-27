@@ -1,23 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../admin/components/Icon";
 import { RequiredFieldMark } from "../../admin/components/RequiredFieldMark";
-import { UserAvatar } from "../../admin/components/UserAvatar";
+import { InitialsAvatar } from "../../admin/components/InitialsAvatar";
 import { SidePanel } from "../../admin/components/SidePanel";
-import { ConfirmDialog } from "../../admin/components/ConfirmDialog";
-import { ManagementActionButton } from "../../admin/components/ManagementActionButton";
+import { StatusSwitch } from "../../admin/components/StatusSwitch";
 import { TransientSuccessMessage } from "../../admin/components/TransientSuccessMessage";
-import { PrimaryActionButton } from "../../admin/components/PrimaryActionButton";
-import { SectionActions } from "../../admin/components/SectionActions";
 import { can, type PermissionMap } from "../../admin/models/access";
 import { disabledReason, noAccess } from "../../admin/models/disabledReason";
 import { Skeleton } from "../../admin/components/Skeleton";
-import type { EmployeeRoleSummary, PermissionMatrix } from "../models/employee";
-import { PermissionMatrixEditor } from "../components/PermissionMatrixEditor";
-import { RoleSearchSelect } from "../components/RoleSearchSelect";
+import type { EmployeeStatus } from "../models/employee";
 import { useEmployeeDetailsViewModel } from "../viewmodels/employeeDetailsViewModel";
 
+/**
+ * An employee's account, as a panel over the staff list: sign-in status,
+ * password reset and roles. Changes are staged and applied with "Save changes".
+ */
 export function EmployeeDetailsView({
   employeeId,
   onBack,
@@ -35,78 +34,73 @@ export function EmployeeDetailsView({
   const canUpdateEmployee = can(permissions, "employees", "update");
   const canAssignRole = can(permissions, "employee_roles", "insert");
   const canRemoveRole = can(permissions, "employee_roles", "delete");
-  const canUpdateRole = can(permissions, "roles", "update");
-  const canRestoreRole = can(permissions, "employee_roles", "update");
 
-  // Edit employee details
+  const [status, setStatus] = useState<EmployeeStatus | null>(null);
+  const [addedRoleIds, setAddedRoleIds] = useState<string[]>([]);
+  const [removedAssignmentIds, setRemovedAssignmentIds] = useState<string[]>([]);
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const roleMenuRef = useRef<HTMLDivElement | null>(null);
+
   const [showEditDetails, setShowEditDetails] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
-  // Edit role
-  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
-  const [roleName, setRoleName] = useState("");
-  const [roleDescription, setRoleDescription] = useState("");
-  const [roleMatrix, setRoleMatrix] = useState<PermissionMatrix>({});
-  const editingRole = vm.roles.find((role) => role.id === editingRoleId);
+  useEffect(() => {
+    if (!roleMenuOpen) return;
+    const onDown = (event: MouseEvent) => { if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) setRoleMenuOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [roleMenuOpen]);
 
-  // Add / remove role
-  const [newRoleName, setNewRoleName] = useState("");
-  const [roleToRemove, setRoleToRemove] = useState<EmployeeRoleSummary | null>(null);
-
-  if (!employee && vm.isLoading) {
-    return (
-      <section className="employee-workspace employee-details" aria-busy="true">
-        <button className="back-link" type="button" onClick={onBack}>
-          <Icon name="arrow-left" size={15} /> Back to staff list
-        </button>
-        <header className="employee-profile-header">
-          <div>
-            <Skeleton width={56} height={56} style={{ borderRadius: "50%" }} />
-            <div style={{ display: "grid", gap: 8, minWidth: 220 }}>
-              <Skeleton width="40%" height={10} />
-              <Skeleton width="80%" height={20} />
-              <Skeleton width="60%" height={12} />
-            </div>
-          </div>
-        </header>
-        <div className="employee-detail-grid">
-          {Array.from({ length: 4 }, (_, index) => (
-            <article key={index}>
-              <Skeleton width="45%" height={10} />
-              <Skeleton width="70%" height={16} style={{ marginTop: 8 }} />
-            </article>
-          ))}
-        </div>
-        <div className="employee-permissions">
-          <Skeleton width={140} height={16} />
-          <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-            <Skeleton height={36} />
-            <Skeleton height={36} />
-          </div>
-        </div>
-      </section>
-    );
-  }
+  const createdAt = employee?.createdAt;
+  const joinedDate = createdAt ? new Date(createdAt) : null;
+  const joined = !createdAt ? "" : joinedDate && !Number.isNaN(joinedDate.getTime()) ? joinedDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : createdAt;
 
   if (!employee) {
     return (
-      <section className="employee-workspace">
-        <p>Employee not found.</p>
-        <button className="secondary-button" onClick={onBack}>
-          Back
-        </button>
-      </section>
+      <SidePanel open onClose={onBack} title={vm.isLoading ? "Loading…" : "Employee not found"} description={vm.isLoading ? undefined : "This employee may have been removed."}>
+        {vm.isLoading ? <div style={{ display: "grid", gap: 12 }}><Skeleton height={64} /><Skeleton height={64} /><Skeleton height={90} /></div> : null}
+      </SidePanel>
     );
   }
 
-  const assignedRoleIds = new Set(employee.roleIds);
-  // Removed roles can be restored from their own row, so they aren't offered here.
-  const assignableRoles = vm.roles.filter((role) => !assignedRoleIds.has(role.id));
-  const orderedRoles = [...employee.roles].sort(
-    (a, b) => Number(a.status === "Inactive") - Number(b.status === "Inactive"),
+  const currentStatus = status ?? employee.status;
+  const statusChanged = currentStatus !== employee.status;
+
+  const activeRoles = employee.roles.filter((role) => role.status === "Active" && !removedAssignmentIds.includes(role.assignmentId));
+  const addedRoles = vm.roles.filter((role) => addedRoleIds.includes(role.id));
+  const shownRoleIds = new Set([...activeRoles.map((role) => role.id), ...addedRoleIds]);
+  // Roles they once had are offered again here; adding one switches it back on.
+  const assignableRoles = vm.roles.filter((role) => !shownRoleIds.has(role.id));
+
+  const hasChanges = statusChanged || addedRoleIds.length > 0 || removedAssignmentIds.length > 0;
+  const saveBlocked = disabledReason(
+    [vm.isUpdatingStatus || vm.isAssigningRole || vm.isRemovingRole, "Please wait, changes are being saved"],
+    [!hasChanges, "Nothing has changed yet"],
   );
-  const activeRoleCount = employee.roles.filter((role) => role.status === "Active").length;
+
+  const removeRole = (role: { id: string; assignmentId: string }) => {
+    // A role that was only just staged is simply unstaged.
+    if (addedRoleIds.includes(role.id)) setAddedRoleIds((ids) => ids.filter((id) => id !== role.id));
+    else setRemovedAssignmentIds((ids) => [...ids, role.assignmentId]);
+  };
+
+  const addRole = (roleId: string) => {
+    setRoleMenuOpen(false);
+    const previous = employee.roles.find((role) => role.id === roleId && role.status === "Active" && removedAssignmentIds.includes(role.assignmentId));
+    // Putting back a role that was just crossed out cancels the removal.
+    if (previous) setRemovedAssignmentIds((ids) => ids.filter((id) => id !== previous.assignmentId));
+    else setAddedRoleIds((ids) => [...ids, roleId]);
+  };
+
+  const save = async () => {
+    const ok = await vm.saveChanges({ status: statusChanged ? currentStatus : undefined, addRoleIds: addedRoleIds, removeAssignmentIds: removedAssignmentIds });
+    if (ok) {
+      setStatus(null);
+      setAddedRoleIds([]);
+      setRemovedAssignmentIds([]);
+    }
+  };
 
   const saveDetailsBlocked = disabledReason(
     [vm.isUpdatingEmployee, "Please wait, changes are being saved"],
@@ -115,285 +109,116 @@ export function EmployeeDetailsView({
     [name.trim() === employee.name && email.trim() === employee.email, "Nothing has changed yet"],
   );
 
-  const openEditDetails = () => {
-    setName(employee.name);
-    setEmail(employee.email);
-    setShowEditDetails(true);
-  };
-
-  const openEditRole = (roleId: string) => {
-    const role = vm.roles.find((item) => item.id === roleId);
-    if (!role) return;
-    setRoleName(role.name);
-    setRoleDescription(role.description);
-    setRoleMatrix(role.matrix);
-    setEditingRoleId(role.id);
-  };
+  const busy = vm.isUpdatingStatus || vm.isAssigningRole || vm.isRemovingRole;
 
   return (
-    <section className="employee-workspace employee-details">
-      <button className="back-link" type="button" onClick={onBack}>
-        <Icon name="arrow-left" size={15} /> Back to staff list
-      </button>
-      <header className="employee-profile-header">
-        <div>
-          <UserAvatar name={employee.name} imageUrl={employee.profileImgUrl} size="large" />
-          <div>
-            <span className="eyebrow">ACCOUNT OVERVIEW</span>
-            <h2>{employee.name}</h2>
-            <p>{employee.email}</p>
-          </div>
-        </div>
-        <SectionActions>
-          <button
-            className="primary-button"
-            type="button"
-            onClick={openEditDetails}
-            disabled={!canUpdateEmployee}
-            data-tooltip={canUpdateEmployee ? undefined : noAccess("edit employee details")}
-            data-tooltip-kind="access"
-          >
-            Edit details
-          </button>
-          <button className="secondary-button" type="button" onClick={onAssignRole}>
-            Roles &amp; access
-          </button>
-        </SectionActions>
-      </header>
-
-      <TransientSuccessMessage message={vm.savedMessage} />
-      {vm.errorMessage && <div className="api-state api-state--error">{vm.errorMessage}</div>}
-
-      <div className="employee-detail-grid">
-        <article>
-          <span>{activeRoleCount > 1 ? "Roles" : "Role"}</span>
-          <strong>{employee.role}</strong>
-        </article>
-        <article>
-          <span>Status</span>
-          <strong>{employee.status}</strong>
-        </article>
-        <article>
-          <span>Employee ID</span>
-          <strong>{employee.empId}</strong>
-        </article>
-        <article>
-          <span>Joined</span>
-          <strong>{employee.createdAt}</strong>
-        </article>
-      </div>
-
-      {/* ================================
-          ASSIGNED ROLES
-      ================================= */}
-      <div className="employee-permissions">
-        <h3>Assigned roles</h3>
-        <div className="permission-matrix-readout">
-          {orderedRoles.map((role) => role.status === "Inactive" ? (
-            <div className="permission-matrix-row is-removed" key={role.assignmentId}>
-              <div>
-                <strong>{role.name}</strong>
-                <span className="role-removed-pill">Removed</span>
-              </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                <ManagementActionButton
-                  action="restore"
-                  ariaLabel={`Restore ${role.name}`}
-                  onClick={() => vm.restoreRole(role.assignmentId)}
-                  disabled={!canRestoreRole || vm.isRestoringRole}
-                  tooltip={!canRestoreRole ? noAccess("give removed roles back") : vm.isRestoringRole ? "Please wait, the role is being restored" : undefined}
-                  tooltipKind={canRestoreRole ? undefined : "access"}
-                />
-              </div>
+    <>
+      <SidePanel
+        open
+        onClose={onBack}
+        title={employee.name}
+        closeDisabled={busy}
+        header={(
+          <div className="td-person">
+            <InitialsAvatar name={employee.name} imageUrl={employee.profileImgUrl} size={52} />
+            <div>
+              <h3>{employee.name}</h3>
+              <p>{employee.email}</p>
+              <small>
+                {employee.empId}{joined ? ` · Joined ${joined}` : ""}
+                {canUpdateEmployee && <button type="button" className="td-inline-link" onClick={() => { setName(employee.name); setEmail(employee.email); setShowEditDetails(true); }}>Edit details</button>}
+              </small>
             </div>
-          ) : (
-            <div className="permission-matrix-row" key={role.assignmentId}>
-              <div>
-                <strong>{role.name}</strong>
-              </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                <ManagementActionButton
-                  action="edit"
-                  ariaLabel={`Edit ${role.name}`}
-                  onClick={() => openEditRole(role.id)}
-                  disabled={!canUpdateRole}
-                  tooltip={!canUpdateRole ? noAccess("edit roles") : undefined}
-                  tooltipKind={!canUpdateRole ? "access" : undefined}
-                />
-                <ManagementActionButton
-                  action="remove"
-                  ariaLabel={`Remove ${role.name}`}
-                  onClick={() => setRoleToRemove(role)}
-                  disabled={!canRemoveRole || vm.isRemovingRole}
-                  tooltip={!canRemoveRole ? noAccess("remove roles from employees") : vm.isRemovingRole ? "Please wait, a role is being removed" : undefined}
-                  tooltipKind={!canRemoveRole ? "access" : undefined}
-                />
-              </div>
-            </div>
-          ))}
-          {activeRoleCount === 0 && <div className="api-state">No active roles. Add one below{orderedRoles.length ? " or restore a removed one" : ""}.</div>}
-        </div>
-
-        {assignableRoles.length > 0 && (
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginTop: 12 }}>
-            <label style={{ flex: 1 }}>
-              <span>Add another role</span>
-              <RoleSearchSelect
-                roles={assignableRoles}
-                value={newRoleName}
-                onChange={setNewRoleName}
-                disabled={!canAssignRole || vm.isAssigningRole}
-                disabledHint={canAssignRole ? undefined : noAccess("add roles to employees")}
-                disabledHintKind={canAssignRole ? undefined : "access"}
-                placeholder="Select role"
-              />
-            </label>
-            <PrimaryActionButton
-              type="button"
-              disabled={!canAssignRole || !newRoleName || vm.isAssigningRole}
-              data-tooltip={!canAssignRole ? noAccess("add roles to employees") : vm.isAssigningRole ? "Please wait, the role is being added" : !newRoleName ? "Select a role to add first" : undefined}
-              data-tooltip-kind={canAssignRole ? undefined : "access"}
-              onClick={async () => {
-                const role = assignableRoles.find((item) => item.name === newRoleName);
-                if (role && (await vm.addRole(role.id))) setNewRoleName("");
-              }}
-            >
-              {vm.isAssigningRole ? "Adding..." : "Add role"}
-            </PrimaryActionButton>
           </div>
         )}
-      </div>
+        footer={(
+          <>
+            <button type="button" className="td-btn" onClick={onBack} disabled={busy}>Cancel</button>
+            <button type="button" className="td-btn td-btn--primary" onClick={save} disabled={Boolean(saveBlocked)} data-tooltip={saveBlocked}>
+              <Icon name="check" size={14} stroke={2.4} />{busy ? "Saving…" : "Save changes"}
+            </button>
+          </>
+        )}
+      >
+        <TransientSuccessMessage message={vm.savedMessage} />
+        {vm.errorMessage && <div className="api-state api-state--error">{vm.errorMessage}</div>}
 
-      {/* ================================
-          EDIT DETAILS PANEL
-      ================================= */}
+        <div className="td-setting">
+          <div><strong>Status</strong><small>When off, this employee can&apos;t sign in</small></div>
+          <StatusSwitch
+            checked={currentStatus === "Active"}
+            label={`Sign-in status of ${employee.name}`}
+            disabled={!canUpdateEmployee || busy}
+            tooltip={!canUpdateEmployee ? noAccess("activate or deactivate employees") : undefined}
+            tooltipKind={canUpdateEmployee ? undefined : "access"}
+            onChange={(on) => setStatus(on ? "Active" : "Inactive")}
+          />
+        </div>
+
+        <div className="td-setting">
+          <div><strong>Password</strong><small>Send a link so they can set a new one</small></div>
+          <button type="button" className="td-btn td-btn--small" onClick={vm.sendResetLink} disabled={!canUpdateEmployee || vm.isSendingReset}
+            data-tooltip={!canUpdateEmployee ? noAccess("reset passwords") : undefined} data-tooltip-kind={canUpdateEmployee ? undefined : "access"}>
+            {vm.isSendingReset ? "Sending…" : "Send reset link"}
+          </button>
+        </div>
+
+        <div className="td-divider" />
+
+        <div className="td-section-head">
+          <h4>Roles</h4>
+          <button type="button" className="td-inline-link td-inline-link--dark" onClick={onAssignRole}>Manage roles</button>
+        </div>
+        <p className="td-hint">An employee can have more than one role. They get the access of every role added.</p>
+
+        <div className="td-chip-row">
+          {[...activeRoles, ...addedRoles.map((role) => ({ id: role.id, name: role.name, assignmentId: "" }))].map((role) => (
+            <span className="td-role-tag" key={`${role.id}-${role.assignmentId}`}>
+              {role.name}
+              <button type="button" aria-label={`Remove ${role.name}`} disabled={!canRemoveRole || busy}
+                data-tooltip={!canRemoveRole ? noAccess("remove roles from employees") : undefined} data-tooltip-kind={canRemoveRole ? undefined : "access"}
+                onClick={() => removeRole(role)}><Icon name="close" size={10} stroke={2.6} /></button>
+            </span>
+          ))}
+          <div className="td-addrole" ref={roleMenuRef}>
+            <button type="button" className="td-role-tag td-role-tag--add" disabled={!canAssignRole || busy || assignableRoles.length === 0}
+              aria-haspopup="listbox" aria-expanded={roleMenuOpen}
+              data-tooltip={!canAssignRole ? noAccess("add roles to employees") : assignableRoles.length === 0 ? "No other roles to add" : undefined} data-tooltip-kind={canAssignRole ? undefined : "access"}
+              onClick={() => setRoleMenuOpen((open) => !open)}>
+              + Add role <Icon name="chevron-down" size={12} />
+            </button>
+            {roleMenuOpen && (
+              <ul className="td-menu td-menu--list" role="listbox">
+                {assignableRoles.map((role) => <li key={role.id}><button type="button" role="option" aria-selected="false" onClick={() => addRole(role.id)}>{role.name}</button></li>)}
+              </ul>
+            )}
+          </div>
+        </div>
+        {activeRoles.length === 0 && addedRoles.length === 0 && <p className="td-hint">No active roles yet.</p>}
+      </SidePanel>
+
       <SidePanel
         open={showEditDetails}
         onClose={() => setShowEditDetails(false)}
-        eyebrow="EMPLOYEE"
+        elevated
         title="Edit details"
         description={`Update ${employee.name}'s name and email.`}
         closeDisabled={vm.isUpdatingEmployee}
-      >
-        <div className="form-grid">
-          <label>
-            <span>Name<RequiredFieldMark /></span>
-            <input value={name} onChange={(event) => setName(event.target.value)} disabled={vm.isUpdatingEmployee} required />
-          </label>
-          <label>
-            <span>Email<RequiredFieldMark /></span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              disabled={vm.isUpdatingEmployee}
-              required
-            />
-          </label>
-        </div>
-        <div className="assign-role-actions">
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => setShowEditDetails(false)}
-            disabled={vm.isUpdatingEmployee}
-            data-tooltip={vm.isUpdatingEmployee ? "Please wait, changes are being saved" : undefined}
-          >
-            Cancel
-          </button>
-          <button
-            className="primary-button"
-            type="button"
-            disabled={Boolean(saveDetailsBlocked)}
-            data-tooltip={saveDetailsBlocked}
-            onClick={async () => {
-              if (await vm.updateDetails(name, email)) setShowEditDetails(false);
-            }}
-          >
-            {vm.isUpdatingEmployee ? "Saving..." : "Save changes"}
-          </button>
-        </div>
-      </SidePanel>
-
-      {/* ================================
-          EDIT ROLE PANEL
-      ================================= */}
-      <SidePanel
-        open={Boolean(editingRole)}
-        onClose={() => setEditingRoleId(null)}
-        eyebrow="ROLE MANAGEMENT"
-        title={`Edit ${editingRole?.name ?? "role"}`}
-        description="Changes apply to every employee who has this role."
-        widthVariant="wide"
-        closeDisabled={vm.isUpdatingRole}
-      >
-        <div className="form-grid">
-          <label>
-            <span>Role name<RequiredFieldMark /></span>
-            <input value={roleName} onChange={(event) => setRoleName(event.target.value)} disabled={vm.isUpdatingRole} required />
-          </label>
-          <label>
-            <span>Description</span>
-            <input
-              value={roleDescription}
-              onChange={(event) => setRoleDescription(event.target.value)}
-              disabled={vm.isUpdatingRole}
-            />
-          </label>
-        </div>
-        <PermissionMatrixEditor
-          canSetUpSections={can(permissions, "permissions", "insert")}
-          value={roleMatrix}
-          permissions={vm.permissions}
-          onChange={setRoleMatrix}
-          disabled={vm.isUpdatingRole}
-        />
-        <div className="assign-role-actions">
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => setEditingRoleId(null)}
-            disabled={vm.isUpdatingRole}
-            data-tooltip={vm.isUpdatingRole ? "Please wait, the role is being saved" : undefined}
-          >
-            Cancel
-          </button>
-          <button
-            className="primary-button"
-            type="button"
-            disabled={vm.isUpdatingRole || !roleName.trim()}
-            data-tooltip={vm.isUpdatingRole ? "Please wait, the role is being saved" : !roleName.trim() ? "Enter a role name" : undefined}
-            onClick={async () => {
-              if (editingRole && (await vm.updateRole(editingRole.id, roleName, roleDescription, roleMatrix))) {
-                setEditingRoleId(null);
-              }
-            }}
-          >
-            {vm.isUpdatingRole ? "Saving..." : "Save role"}
-          </button>
-        </div>
-      </SidePanel>
-
-      <ConfirmDialog
-        open={Boolean(roleToRemove)}
-        tone="danger"
-        title="Remove role?"
-        message={
+        footer={(
           <>
-            <strong>{roleToRemove?.name}</strong> will be removed from <strong>{employee.name}</strong>.
-            <br />
-            The role itself is not deleted.
+            <button type="button" className="td-btn" onClick={() => setShowEditDetails(false)} disabled={vm.isUpdatingEmployee}>Cancel</button>
+            <button type="button" className="td-btn td-btn--primary" disabled={Boolean(saveDetailsBlocked)} data-tooltip={saveDetailsBlocked}
+              onClick={async () => { if (await vm.updateDetails(name, email)) setShowEditDetails(false); }}>
+              {vm.isUpdatingEmployee ? "Saving…" : "Save changes"}
+            </button>
           </>
-        }
-        confirmLabel="Remove role"
-        busyLabel="Removing..."
-        busy={vm.isRemovingRole}
-        onCancel={() => setRoleToRemove(null)}
-        onConfirm={async () => {
-          if (roleToRemove) await vm.removeRole(roleToRemove.assignmentId);
-          setRoleToRemove(null);
-        }}
-      />
-    </section>
+        )}
+      >
+        <div className="td-form">
+          <label><span>Name<RequiredFieldMark /></span><input value={name} onChange={(event) => setName(event.target.value)} disabled={vm.isUpdatingEmployee} required /></label>
+          <label><span>Email<RequiredFieldMark /></span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={vm.isUpdatingEmployee} required /></label>
+        </div>
+      </SidePanel>
+    </>
   );
 }

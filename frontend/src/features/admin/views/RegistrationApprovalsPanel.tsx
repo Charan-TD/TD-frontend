@@ -1,13 +1,12 @@
 "use client";
 
 import { Icon } from "../components/Icon";
-import { UserAvatar } from "../components/UserAvatar";
 import { useState, type ReactNode } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SoftGreenButton } from "../components/SoftGreenButton";
 import { LocationMap } from "../components/LocationMap";
-import { RefreshButton } from "../components/RefreshButton";
-import { ManagementActionButton } from "../components/ManagementActionButton";
+import { InitialsAvatar } from "../components/InitialsAvatar";
+import { PageFooter } from "../components/PageFooter";
 import { ReviewModal } from "../components/ReviewModal";
 import { SkeletonTable } from "../components/Skeleton";
 import { formatStatusLabel } from "../models/formatStatusLabel";
@@ -17,9 +16,11 @@ import {
   useGetRestaurantReviewQuery,
   type RegistrationRequest,
   type RegistrationStatus,
+  type RestaurantReview,
 } from "../../restaurants/api/registrationRequestsApi";
+import { publicRestaurantId } from "../../restaurants/api/restaurantId";
 import { cuisineNames, useGetCuisinesQuery } from "../../restaurants/api/cuisinesApi";
-import { STATUS_FILTERS, errorMessage, formatDate, ridersOwnerLabel, str } from "./approvalShared";
+import { errorMessage, formatDate, ridersOwnerLabel, str } from "./approvalShared";
 
 const PHOTOS: { key: string; label: string }[] = [
   { key: "logo_url", label: "Logo" },
@@ -42,7 +43,7 @@ function Card({ title, rows, wide = false }: { title: string; rows: [string, Rea
   );
 }
 
-const WEEK: { key: string; label: string }[] = [
+export const WEEK: { key: string; label: string }[] = [
   { key: "mon", label: "Monday" },
   { key: "tue", label: "Tuesday" },
   { key: "wed", label: "Wednesday" },
@@ -52,14 +53,14 @@ const WEEK: { key: string; label: string }[] = [
   { key: "sun", label: "Sunday" },
 ];
 
-type DayHours = {
+export type DayHours = {
   is_open?: boolean;
   is_24_hours?: boolean;
   slots?: { opening_time?: string; closing_time?: string }[];
 };
 
 /** "15:30" -> "3:30 PM" */
-function clock(time: string | undefined): string {
+export function clock(time: string | undefined): string {
   const match = /^(\d{1,2}):(\d{2})/.exec(time ?? "");
   if (!match) return time ?? "-";
   const hour = Number(match[1]);
@@ -86,8 +87,18 @@ function hoursRows(value: unknown): [string, ReactNode][] {
   return rows.length ? rows : [["Hours", "-"]];
 }
 
-export function ReviewDetails({ restaurantId }: { restaurantId: string }) {
-  const { data: r, isLoading, isError, error } = useGetRestaurantReviewQuery(restaurantId);
+export function ReviewDetails({
+  restaurantId,
+  fallback = null,
+}: {
+  restaurantId: string;
+  /** Restaurant record from the registration list, used when there is no public ID to fetch with. */
+  fallback?: RestaurantReview | null;
+}) {
+  const hasPublicId = publicRestaurantId(restaurantId) !== null;
+  const query = useGetRestaurantReviewQuery(restaurantId, { skip: !hasPublicId && !!fallback });
+  const { isLoading, isError, error } = query;
+  const r = hasPublicId || !fallback ? query.data : fallback;
   const { data: cuisines = [] } = useGetCuisinesQuery();
 
   if (isLoading) return <div className="api-state review-card--wide">Loading restaurant details…</div>;
@@ -119,7 +130,19 @@ export function ReviewDetails({ restaurantId }: { restaurantId: string }) {
     },
   ];
   const photos = PHOTOS.filter((photo) => typeof r[photo.key] === "string");
-  const missingCount = documents.filter((doc) => typeof doc.url !== "string").length;
+  // The list response carries storage keys (*_document_id) but no signed links; those only
+  // come from GET /restaurants/{publicId}. A document counts as uploaded if either exists.
+  const documentIds: Record<string, unknown> = {
+    "PAN card": r.pan_document_id,
+    "GST certificate": r.gst_document_id,
+    "FSSAI licence": r.fssai_document_id,
+    "Business proof": r.business_proof_document_id,
+    "Aadhaar card": r.aadhaar_document_id,
+    "Bank proof": r.bank_proof_id,
+  };
+  const isUploaded = (doc: { label: string; url: unknown }) =>
+    typeof doc.url === "string" || (typeof documentIds[doc.label] === "string" && !!documentIds[doc.label]);
+  const missingCount = documents.filter((doc) => !isUploaded(doc)).length;
 
   return (
     <div className="review-columns">
@@ -175,9 +198,9 @@ export function ReviewDetails({ restaurantId }: { restaurantId: string }) {
           {documents.map((doc) => {
             const url = typeof doc.url === "string" ? doc.url : null;
             return (
-              <li key={doc.label} className={`doc-item${url ? "" : " doc-item--missing"}`}>
+              <li key={doc.label} className={`doc-item${isUploaded(doc) ? "" : " doc-item--missing"}`}>
                 <span className="doc-item__icon" aria-hidden="true">
-                  {url ? "✓" : "!"}
+                  {isUploaded(doc) ? "✓" : "!"}
                 </span>
                 <div className="doc-item__info">
                   <strong>{doc.label}</strong>
@@ -188,6 +211,8 @@ export function ReviewDetails({ restaurantId }: { restaurantId: string }) {
                   <a className="secondary-button doc-item__view" href={url} target="_blank" rel="noopener noreferrer">
                     View document
                   </a>
+                ) : isUploaded(doc) ? (
+                  <span className="review-badge review-badge--ok">Uploaded · link unavailable</span>
                 ) : (
                   <span className="review-badge review-badge--warn">Not uploaded</span>
                 )}
@@ -199,7 +224,7 @@ export function ReviewDetails({ restaurantId }: { restaurantId: string }) {
           <div className="doc-photos">
             {photos.map((photo) => (
               <a key={photo.key} href={r[photo.key] as string} target="_blank" rel="noopener noreferrer">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                { }
                 <img src={r[photo.key] as string} alt={photo.label} loading="lazy" />
                 <span>{photo.label}</span>
               </a>
@@ -212,8 +237,31 @@ export function ReviewDetails({ restaurantId }: { restaurantId: string }) {
   );
 }
 
-export function RegistrationApprovalsPanel() {
-  const [filter, setFilter] = useState<RegistrationStatus>("pending");
+const PAGE_SIZE = 10;
+
+/** A field from the restaurant record embedded in the registration request. */
+const recordText = (request: RegistrationRequest, key: string): string | null => {
+  const value = request.restaurantRecord?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const shortDate = (value: string | null | undefined) => {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-";
+};
+
+/** FSSAI, GST and bank proof: uploaded if the record has a signed link or a stored document key. */
+const documentChips = (request: RegistrationRequest) => {
+  const has = (...keys: string[]) => keys.some((key) => !!request.restaurantRecord?.[key]);
+  return [
+    { label: "FSSAI", ok: has("fssai_document_id", "fssai_document_url") },
+    { label: "GST", ok: has("gst_document_id", "gst_document_url") },
+    { label: "Bank", ok: has("bank_proof_id", "bank_proof_url") },
+  ];
+};
+
+export function RegistrationApprovalsPanel({ filter, search }: { filter: RegistrationStatus; search: string }) {
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<RegistrationRequest | null>(null);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -241,7 +289,7 @@ export function RegistrationApprovalsPanel() {
   const onApprove = async () => {
     if (!selected) return;
     try {
-      await decide({ requestId: selected.requestId, decision: "ACCEPTED" }).unwrap();
+      await decide({ requestId: selected.requestId, phone: recordText(selected, "owner_mobile"), decision: "ACCEPTED" }).unwrap();
       closeAll();
     } catch (err) {
       setConfirmApprove(false);
@@ -254,6 +302,7 @@ export function RegistrationApprovalsPanel() {
     try {
       await decide({
         requestId: selected.requestId,
+        phone: recordText(selected, "owner_mobile"),
         decision: "REJECTED",
         rejection_reason: reason.trim(),
       }).unwrap();
@@ -263,83 +312,72 @@ export function RegistrationApprovalsPanel() {
     }
   };
 
+  const term = search.trim().toLowerCase();
+  const matching = requests.filter((r) => !term || [r.restaurantName, r.ownerName, recordText(r, "owner_mobile"), recordText(r, "restaurant_contact")].some((v) => String(v ?? "").toLowerCase().includes(term)));
+  const totalPages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const current = Math.min(page, totalPages);
+  const visible = matching.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+
+  // Changing tab or search starts again from the first page.
+  const [resetKey, setResetKey] = useState(`${filter}|${search}`);
+  if (resetKey !== `${filter}|${search}`) {
+    setResetKey(`${filter}|${search}`);
+    setPage(1);
+    closeAll();
+  }
+
+  const open = (request: RegistrationRequest, action?: "approve" | "reject") => {
+    setActionError(null);
+    setSelected(request);
+    if (action === "approve") setConfirmApprove(true);
+    if (action === "reject") setRejecting(true);
+  };
+
   return (
     <div className="approval-panel">
-      <div className="approval-filters" role="tablist">
-        {STATUS_FILTERS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={filter === item.id}
-            className={filter === item.id ? "primary-button" : "secondary-button"}
-            onClick={() => {
-              setFilter(item.id);
-              closeAll();
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-
-        <RefreshButton refreshing={isFetching} label="registration requests" onRefresh={() => refetch()} />
-      </div>
-
       {isError && (
         <div className="api-state api-state--error">
           Unable to load registration requests. Server said: {errorMessage(error)}
+          <button type="button" className="td-outline-btn" onClick={() => refetch()} disabled={isFetching}>Retry</button>
         </div>
       )}
 
-      {isLoading && <SkeletonTable columns={["Restaurant", "Owner", "Type", "Submitted", "Status"]} />}
+      {isLoading && <SkeletonTable columns={["Restaurant", "Owner", "Phone", "Documents"]} />}
 
-      {!isLoading && !isError && requests.length === 0 && (
-        <div className="api-state">No {filter} registration requests.</div>
+      {!isLoading && !isError && matching.length === 0 && (
+        <div className="api-state">{term ? `No applications match "${search.trim()}".` : `No ${filter} applications.`}</div>
       )}
 
-      {!isLoading && !isError && requests.length > 0 && (
-        <div className="user-table-wrap">
-          <table className="user-table">
-            <thead>
-              <tr>
-                <th>Restaurant</th>
-                <th>Owner</th>
-                <th>Type</th>
-                <th>Riders</th>
-                <th>Submitted</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((request) => (
-                <tr key={request.requestId}>
-                  <td><div className="user-cell"><UserAvatar name={request.restaurantName} imageUrl={request.logoUrl} size="medium" /><span>{request.restaurantName}</span></div></td>
-                  <td>{request.ownerName ?? "-"}</td>
-                  <td>{request.restaurantType ?? "-"}</td>
-                  <td>{ridersOwnerLabel(request.ridersOwner)}</td>
-                  <td>{formatDate(request.createdAt)}</td>
-                  <td>
-                    <span className={`status-pill${String(request.status).toLowerCase() === "approved" ? " status-pill--live" : ""}`}>
-                      <i />
-                      {formatStatusLabel(request.status)}
+      {!isLoading && !isError && matching.length > 0 && (
+        <>
+          <div className="td-approval-grid">
+            {visible.map((request) => {
+              const docs = documentChips(request);
+              return (
+                <article key={request.requestId} className="td-approval-card">
+                  <header>
+                    <InitialsAvatar name={request.restaurantName} imageUrl={request.logoUrl} size={36} />
+                    <span>
+                      <button type="button" className="td-approval-name" onClick={() => open(request)}>{request.restaurantName}</button>
+                      <small>{[request.restaurantType ? formatStatusLabel(request.restaurantType) : null, `Submitted ${shortDate(request.createdAt)}`].filter(Boolean).join(" · ")}</small>
                     </span>
-                  </td>
-                  <td>
-                    <ManagementActionButton
-                      action="review"
-                      ariaLabel={`Review ${request.restaurantName}`}
-                      onClick={() => {
-                        setActionError(null);
-                        setSelected(request);
-                      }}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </header>
+                  <dl>
+                    <div><dt>Owner</dt><dd>{request.ownerName ?? "-"}</dd></div>
+                    <div><dt>Phone</dt><dd>{recordText(request, "owner_mobile") ?? recordText(request, "restaurant_contact") ?? "-"}</dd></div>
+                    <div><dt>Documents</dt><dd className="td-doc-chips">{docs.map((d) => <i key={d.label} className={d.ok ? "is-ok" : "is-missing"}>{d.ok ? "✓" : "!"} {d.label}</i>)}</dd></div>
+                  </dl>
+                  <footer>
+                    {request.status === "pending" && <button type="button" className="td-btn td-btn--small td-btn--reject" onClick={() => open(request, "reject")}>Reject</button>}
+                    <button type="button" className="td-view-link" onClick={() => open(request)}>View</button>
+                    {request.status === "pending" && <button type="button" className="td-btn td-btn--small td-btn--approve" onClick={() => open(request, "approve")}>Approve</button>}
+                  </footer>
+                </article>
+              );
+            })}
+          </div>
+          <PageFooter page={current} totalPages={totalPages} total={matching.length} pageSize={PAGE_SIZE} shown={visible.length} noun="applications" onChange={setPage} />
+        </>
       )}
 
       {selected && !confirmApprove && !rejecting && (
@@ -379,7 +417,7 @@ export function RegistrationApprovalsPanel() {
               </div>
             </div>
           )}
-          <ReviewDetails restaurantId={selected.restaurantId} />
+          <ReviewDetails restaurantId={selected.restaurantId} fallback={selected.restaurantRecord} />
         </ReviewModal>
       )}
 

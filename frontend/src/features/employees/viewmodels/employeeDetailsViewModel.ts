@@ -8,18 +8,20 @@ import {
   useRemoveEmployeeRoleMutation,
   useRestoreEmployeeRoleMutation,
   useUpdateEmployeeMutation,
+  useUpdateEmployeeStatusMutation,
 } from "../api/adminUsersApi";
 import {
   useGetPermissionsQuery,
   useGetRolesQuery,
   useUpdateRoleMutation,
 } from "../api/rolesApi";
-import type { PermissionMatrix } from "../models/employee";
+import type { EmployeeStatus, PermissionMatrix } from "../models/employee";
+import { useForgotEmployeePasswordMutation } from "../../admin/api/authApi";
 import { assignOrRestoreRole, buildRolePermissionPayload, getErrorMessage } from "./assignRoleViewModel";
 
 export function useEmployeeDetailsViewModel(employeeId: string | null, authPermissions: PermissionMap = {}) {
   const { data, isLoading } = useGetEmployeesQuery({ all: true, includeRoleMetadata: true });
-  const employees = data?.employees ?? [];
+  const employees = useMemo(() => data?.employees ?? [], [data]);
 
   const employee = useMemo(
     () => (employeeId ? employees.find((emp) => emp.id === employeeId) ?? null : null),
@@ -38,6 +40,9 @@ export function useEmployeeDetailsViewModel(employeeId: string | null, authPermi
   const [assignEmployeeAccess, { isLoading: isAssigningRole }] = useAssignEmployeeAccessMutation();
   const [removeEmployeeRoleMutation, { isLoading: isRemovingRole }] = useRemoveEmployeeRoleMutation();
   const [restoreEmployeeRoleMutation, { isLoading: isRestoringRole }] = useRestoreEmployeeRoleMutation();
+
+  const [updateStatusMutation, { isLoading: isUpdatingStatus }] = useUpdateEmployeeStatusMutation();
+  const [forgotPassword, { isLoading: isSendingReset }] = useForgotEmployeePasswordMutation();
 
   const [savedMessage, setSavedMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -105,8 +110,45 @@ export function useEmployeeDetailsViewModel(employeeId: string | null, authPermi
   const removeRole = (assignmentId: string) =>
     run(() => removeEmployeeRoleMutation({ assignmentId }).unwrap(), "Role removed from employee.");
 
+  /** Applies the staged edits from the employee panel in one go. */
+  const saveChanges = (changes: { status?: EmployeeStatus; addRoleIds: string[]; removeAssignmentIds: string[] }) => {
+    if (!employee) return Promise.resolve(false);
+    return run(async () => {
+      if (changes.status) await updateStatusMutation({ id: employee.id, status: changes.status }).unwrap();
+      for (const assignmentId of changes.removeAssignmentIds) await removeEmployeeRoleMutation({ assignmentId }).unwrap();
+      for (const roleId of changes.addRoleIds) {
+        await assignOrRestoreRole(
+          employee,
+          employee.id,
+          roleId,
+          (input) => assignEmployeeAccess(input).unwrap(),
+          (input) => restoreEmployeeRoleMutation(input).unwrap(),
+        );
+      }
+    }, "Changes saved.");
+  };
+
+  /** Asks the backend to start a password reset for this employee. */
+  const sendResetLink = async () => {
+    if (!employee) return false;
+    setSavedMessage("");
+    setErrorMessage("");
+    try {
+      const result = await forgotPassword({ email: employee.email }).unwrap();
+      setSavedMessage(result?.message || "Password reset requested.");
+      return true;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      return false;
+    }
+  };
+
   return {
     employee,
+    isUpdatingStatus,
+    isSendingReset,
+    saveChanges,
+    sendResetLink,
     isLoading,
     roles,
     permissions,

@@ -2,6 +2,7 @@ import InputAdornment from "@mui/material/InputAdornment";
 import OutlinedInput from "@mui/material/OutlinedInput";
 import { Icon } from "./Icon";
 import { RefreshButton } from "./RefreshButton";
+import { colors, legacyOranges } from "@/app/theme/tokens";
 
 type Props = {
   value: string;
@@ -33,13 +34,13 @@ export function ListToolbar({ value, onChange, placeholder, label, refreshing = 
           height: 44,
           p: 0,
           borderRadius: "9px",
-          color: "#38455c",
-          backgroundColor: "#fff",
+          color: colors.inkSoft,
+          backgroundColor: colors.surface,
           fontFamily: "inherit",
           fontSize: 14,
-          "& .MuiOutlinedInput-notchedOutline": { borderColor: "#dfe4eb" },
-          "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#c8d0dc" },
-          "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#ff6b21", borderWidth: 1 },
+          "& .MuiOutlinedInput-notchedOutline": { borderColor: colors.line },
+          "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: colors.lineHover },
+          "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: legacyOranges.focusSearch, borderWidth: 1 },
           "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(255, 107, 33, .10)" },
           "& .MuiInputBase-input": {
             height: "100%",
@@ -48,7 +49,7 @@ export function ListToolbar({ value, onChange, placeholder, label, refreshing = 
             boxSizing: "border-box",
             lineHeight: 1.4,
           },
-          "& .MuiInputAdornment-root": { ml: 1.75, mr: 1, color: "#56627a" },
+          "& .MuiInputAdornment-root": { ml: 1.75, mr: 1, color: colors.mutedStrong },
         }}
       />
       {onRefresh && <RefreshButton refreshing={refreshing} label={label} onRefresh={onRefresh} />}
