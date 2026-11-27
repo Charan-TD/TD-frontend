@@ -29,6 +29,7 @@ export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void
   useEffect(() => {
     const remembered = getRememberedEmail();
     if (!remembered) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Runs once after mount: reads browser-only storage so the server-rendered HTML and first client render match.
     setEmail(remembered);
     setRememberMe(true);
   }, []);
@@ -40,6 +41,7 @@ export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void
     sessionStorage.removeItem(SESSION_EXPIRED_NOTE_KEY);
     const detail = sessionStorage.getItem(LAST_401_KEY);
     sessionStorage.removeItem(LAST_401_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Runs once after mount: reads browser-only storage so the server-rendered HTML and first client render match.
     setErrorMessage(
       detail ? `Your session has expired. Please sign in again. (${detail})` : "Your session has expired. Please sign in again.",
     );
@@ -106,10 +108,11 @@ export function useLoginViewModel(onSignIn: (session: EmployeeLoginData) => void
       store.dispatch(baseApi.util.resetApiState());
 
       onSignIn(normalizedSession);
-    } catch (error: any) {
+    } catch (error) {
+      const apiError = error as { data?: { message?: string; error?: string } } | undefined;
       setErrorMessage(
-        error?.data?.message ||
-        error?.data?.error ||
+        apiError?.data?.message ||
+        apiError?.data?.error ||
         "Invalid email or password",
       );
     } finally {

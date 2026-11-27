@@ -148,6 +148,7 @@ export function normalizePermissionMatrix(
     "riders",
     "orders",
     "stations",
+    "feedback",
     "sales",
     "marketing",
     "reports",
@@ -397,11 +398,64 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   delete: "Delete",
 };
 
-/** e.g. ["read", "insert"] -> "View, Add" */
+/**
+ * The portal treats access as two switches per section:
+ *  - View: "read"
+ *  - Edit: add, update and delete together ("insert", "update", "delete")
+ * Edit always includes View, so a person never edits what they cannot see.
+ */
+export const EDIT_ACTIONS = ["insert", "update", "delete"] as const;
+
+export const hasView = (actions: readonly string[] | undefined) => (actions ?? []).includes("read");
+export const hasEdit = (actions: readonly string[] | undefined) =>
+  EDIT_ACTIONS.some((action) => (actions ?? []).includes(action));
+
+/** e.g. ["read", "insert", "update"] -> "View, Edit" */
 export function describeActions(actions: readonly string[] | undefined): string {
-  return (actions ?? [])
-    .map((action) => ACTION_DISPLAY_LABELS[action] ?? action)
-    .join(", ");
+  const parts: string[] = [];
+  if (hasView(actions)) parts.push("View");
+  if (hasEdit(actions)) parts.push("Edit");
+  return parts.join(", ");
+}
+
+/** Switch View on or off for a section. Turning View off also removes Edit. */
+export function setSectionView(matrix: PermissionMatrix, resource: string, on: boolean): PermissionMatrix {
+  const next: PermissionMatrix = { ...matrix };
+  const current = next[resource] ?? [];
+  if (on) {
+    next[resource] = current.includes("read") ? current : ["read", ...current];
+  } else {
+    delete next[resource];
+  }
+  return next;
+}
+
+/** Switch Edit on or off for a section. Turning Edit on also turns View on. */
+export function setSectionEdit(matrix: PermissionMatrix, resource: string, on: boolean): PermissionMatrix {
+  const next: PermissionMatrix = { ...matrix };
+  const current = next[resource] ?? [];
+  if (on) {
+    next[resource] = Array.from(new Set(["read", ...current, ...EDIT_ACTIONS])) as AdminPermissionCode[];
+  } else {
+    const kept = current.filter((action) => !(EDIT_ACTIONS as readonly string[]).includes(action));
+    if (kept.length === 0) delete next[resource];
+    else next[resource] = kept;
+  }
+  return next;
+}
+
+/** Number of ticked boxes (a section with View and Edit counts as 2). */
+export function countPermissions(matrix: PermissionMatrix): number {
+  return Object.entries(matrix)
+    .filter(([resource]) => !isLinkedResource(resource) && !isPausedSection(resource))
+    .reduce((sum, [, actions]) => sum + (hasView(actions) ? 1 : 0) + (hasEdit(actions) ? 1 : 0), 0);
+}
+
+/** Number of sections with any access. */
+export function countSections(matrix: PermissionMatrix): number {
+  return Object.entries(matrix).filter(
+    ([resource, actions]) => !isLinkedResource(resource) && !isPausedSection(resource) && (actions ?? []).length > 0,
+  ).length;
 }
 
 /** e.g. "delivery_partners" -> "Delivery Partners" */

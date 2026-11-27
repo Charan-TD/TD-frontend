@@ -1,6 +1,7 @@
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import { Icon } from "./Icon";
+import { colors } from "@/app/theme/tokens";
 
 export type ManagementAction = "view" | "block" | "unblock" | "activate" | "deactivate" | "edit" | "review" | "restore" | "remove";
 
@@ -48,7 +49,7 @@ export function ManagementActionButton({
     : stateIndicator === "blocked"
       ? "toggle-slash"
       : actionIcon[action];
-  const color = actionTone === "positive" ? "#16834a" : actionTone === "negative" ? "#cf4141" : "#202b3d";
+  const color = actionTone === "positive" ? colors.success : actionTone === "negative" ? colors.danger : colors.ink;
   const isToggleAction = action === "activate" || action === "deactivate" || action === "block" || action === "unblock";
 
   return (

@@ -3,6 +3,7 @@
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Icon } from "./Icon";
+import { colors } from "@/app/theme/tokens";
 
 type RefreshButtonProps = {
   onRefresh: () => void;
@@ -26,10 +27,10 @@ export function RefreshButton({ onRefresh, refreshing, label = "this list" }: Re
         minWidth: 0,
         minHeight: 42,
         px: 1.75,
-        borderColor: "#dfe4eb",
+        borderColor: colors.line,
         borderRadius: "9px",
         color: "#243148",
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         fontFamily: "inherit",
         fontSize: 14,
         fontWeight: 500,
@@ -37,7 +38,7 @@ export function RefreshButton({ onRefresh, refreshing, label = "this list" }: Re
         textTransform: "none",
         boxShadow: "none",
         whiteSpace: "nowrap",
-        "&:hover": { borderColor: "#c8d0dc", backgroundColor: "#f8fafc", boxShadow: "none" },
+        "&:hover": { borderColor: colors.lineHover, backgroundColor: "#f8fafc", boxShadow: "none" },
         "& .MuiButton-startIcon": { mr: 0.75, ml: 0 },
       }}
     >

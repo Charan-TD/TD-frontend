@@ -8,9 +8,17 @@ type IconName =
   | "more" | "plus" | "rider" | "search" | "settings" | "store" | "users"
   | "bag" | "wallet" | "dashboard" | "station" | "sparkle" | "shield" | "eye" | "eye-off"
   | "megaphone" | "file" | "zap" | "employee" | "receipt" | "refresh"
-  | "group" | "info" | "ban" | "unblock" | "block" | "play-circle" | "pause-circle" | "toggle-check" | "toggle-slash" | "trash" | "mail" | "phone" | "user";
+  | "star" | "close" | "download" | "chevron-left" | "chevron-right" | "clock"
+  | "group" | "info" | "ban" | "unblock" | "block" | "play-circle" | "pause-circle" | "toggle-check" | "toggle-slash" | "trash" | "mail" | "phone" | "user" | "image";
 
 const paths: Record<IconName, ReactNode> = {
+  image: <><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m21 15-4.5-4.5L6 21"/></>,
+  star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9Z"/>,
+  close: <path d="M6 6l12 12M18 6 6 18"/>,
+  download: <><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></>,
+  "chevron-left": <path d="m15 6-6 6 6 6"/>,
+  "chevron-right": <path d="m9 6 6 6-6 6"/>,
+  clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
   phone: <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>,
   user: <><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="1"/><path d="m3 6 9 7 9-7"/></>,

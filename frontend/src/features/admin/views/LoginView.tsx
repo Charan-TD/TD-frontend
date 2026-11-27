@@ -26,7 +26,7 @@ export function LoginView({ onSignIn }: { onSignIn: (session: EmployeeLoginData)
 
         <div className="login-story__content">
           <span className="eyebrow eyebrow--light">
-            TRAIN DABBA · ADMIN PORTAL
+            TRAIN DHABA · ADMIN PORTAL
           </span>
 
           <h1>Powering a smoother <span>food journey</span></h1>

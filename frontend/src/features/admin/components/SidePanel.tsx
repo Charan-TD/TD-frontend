@@ -17,6 +17,8 @@ type Props = {
     elevated?: boolean;
     widthVariant?: "default" | "wide";
     closeDisabled?: boolean;
+    /** Replaces the title block (e.g. an avatar and account details). */
+    header?: ReactNode;
 };
 
 /**
@@ -37,6 +39,7 @@ export function SidePanel({
     elevated = false,
     widthVariant = "default",
     closeDisabled = false,
+    header,
 }: Props) {
     if (!open) return null;
 
@@ -59,11 +62,13 @@ export function SidePanel({
                 onMouseDown={(event) => event.stopPropagation()}
             >
                 <div className="side-panel-header">
-                    <div>
-                        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
-                        <h3>{title}</h3>
-                        {description && <p>{description}</p>}
-                    </div>
+                    {header ?? (
+                        <div>
+                            {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+                            <h3>{title}</h3>
+                            {description && <p>{description}</p>}
+                        </div>
+                    )}
 
                     <button type="button" className="icon-close" onClick={onClose} aria-label="Close" disabled={closeDisabled} data-tooltip={closeDisabled ? "Please wait, changes are being saved" : undefined}>
                         ×

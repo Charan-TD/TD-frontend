@@ -84,6 +84,33 @@ export const ordersApi = baseApi.injectEndpoints({
           : [{ type: "Order" as const, id: "LIST" }],
     }),
 
+    /** One server page (GET /orders?page&limit&status) with the server's own totals. */
+    getOrdersPage: builder.query<{ rows: Order[]; total: number; totalPages: number }, { page: number; limit: number; status?: string }>({
+      query: ({ page, limit, status }) => ({ url: "/orders", method: "GET", params: { page, limit, ...(status ? { status } : {}) } }),
+      transformResponse: (response: { data?: OrderList }, _meta, { limit }) => {
+        const data = response.data;
+        const rows = (data?.orders ?? []).map((order, index) => withId(order, index));
+        const total = Number(data?.pagination?.total ?? data?.total ?? rows.length);
+        return { rows, total, totalPages: data?.pagination?.totalPages ?? Math.max(1, Math.ceil(total / limit)) };
+      },
+      providesTags: (result) => result
+        ? [...result.rows.map((order) => ({ type: "Order" as const, id: order.id })), { type: "Order" as const, id: "LIST" }]
+        : [{ type: "Order" as const, id: "LIST" }],
+    }),
+
+    /** Number of orders (optionally of one status), from the server's total (one row is fetched). */
+    getOrdersTotal: builder.query<number, { status?: string } | void>({
+      query: (arg) => ({ url: "/orders", method: "GET", params: { page: 1, limit: 1, ...(arg?.status ? { status: arg.status } : {}) } }),
+      transformResponse: (response: { data?: OrderList }) => Number(response.data?.pagination?.total ?? response.data?.total ?? 0),
+      providesTags: [{ type: "Order" as const, id: "LIST" }],
+    }),
+
+    /** PATCH /orders/{id}/status with { status }, e.g. "CANCELLED". */
+    updateOrderStatus: builder.mutation<unknown, { id: string; status: string }>({
+      query: ({ id, status }) => ({ url: `/orders/${encodeURIComponent(id)}/status`, method: "PATCH", body: { status } }),
+      invalidatesTags: [{ type: "Order", id: "LIST" }],
+    }),
+
     /** Fetch all order pages for the admin list and per-station figures. */
     getAllOrders: builder.query<Order[], void>({
       async queryFn(_arg, _api, _extra, baseQuery) {
@@ -105,4 +132,4 @@ export const ordersApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGetOrdersQuery, useGetAllOrdersQuery } = ordersApi;
+export const { useGetOrdersQuery, useGetOrdersPageQuery, useGetOrdersTotalQuery, useGetAllOrdersQuery, useUpdateOrderStatusMutation } = ordersApi;

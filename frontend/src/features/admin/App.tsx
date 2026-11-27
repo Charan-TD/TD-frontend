@@ -11,7 +11,6 @@ import { ManagementView } from "./views/ManagementView";
 import { ProfileView } from "./views/ProfileView";
 import { useAdminPortalViewModel } from "./viewmodels/useAdminPortalViewModel";
 import { EmployeesView } from "../employees/views/EmployeesView";
-import { EmployeeDetailsView } from "../employees/views/EmployeeDetailsView";
 import { EmployeeActivityView } from "../employees/views/EmployeeActivityView";
 import { AssignRoleView } from "../employees/views/AssignRoleView";
 
@@ -36,7 +35,7 @@ export function App() {
   const openSection = (section: PortalSection, subsectionId?: string) => {
     if (section === "employees") return vm.navigate("employees");
     const first = navigationSubsections[section as NavigationSectionId]?.[0];
-    vm.selectManagementService(first?.managementId ?? section, subsectionId ?? first?.id);
+    vm.selectManagementService(first?.managementId ?? section, subsectionId ?? first?.id ?? `${section}-all`);
   };
 
   const shellProps = {
@@ -48,14 +47,15 @@ export function App() {
   };
 
   if (vm.screen === "employees") return <AppShell title={pageCopy.employees.title} subtitle={pageCopy.employees.subtitle} {...shellProps}>{<EmployeesView permissions={vm.admin.permissions} onOpenDetails={vm.selectEmployee} autoOpenCreate={vm.pendingAction === "add-employee"} onAutoOpenHandled={vm.clearPendingAction} />}</AppShell>;
-  if (vm.screen === "employee-details" && vm.selectedEmployeeId) return <AppShell title={pageCopy["employee-details"].title} subtitle={pageCopy["employee-details"].subtitle} {...shellProps}>{<EmployeeDetailsView employeeId={vm.selectedEmployeeId} permissions={vm.admin.permissions} onBack={() => vm.navigate("employees")} onAssignRole={() => vm.navigate("assign-role")} />}</AppShell>;
-  if (vm.screen === "employee-activity") return <AppShell title={pageCopy["employee-activity"].title} subtitle={pageCopy["employee-activity"].subtitle} {...shellProps}>{<EmployeeActivityView onBack={() => vm.navigate("employees")} />}</AppShell>;
+  // An employee opens as a panel over the staff list.
+  if (vm.screen === "employee-details" && vm.selectedEmployeeId) return <AppShell title={pageCopy.employees.title} subtitle={pageCopy.employees.subtitle} {...shellProps}>{<EmployeesView permissions={vm.admin.permissions} onOpenDetails={vm.selectEmployee} detailsId={vm.selectedEmployeeId} onCloseDetails={() => vm.navigate("employees")} onAssignRole={() => vm.navigate("assign-role")} />}</AppShell>;
+  if (vm.screen === "employee-activity") return <AppShell title={pageCopy["employee-activity"].title} subtitle={pageCopy["employee-activity"].subtitle} {...shellProps}>{<EmployeeActivityView onManageAccess={vm.selectEmployee} />}</AppShell>;
   if (vm.screen === "assign-role") return <AppShell title={pageCopy["assign-role"].title} subtitle={pageCopy["assign-role"].subtitle} {...shellProps}>{<AssignRoleView permissions={vm.admin.permissions} onBack={() => vm.navigate("employees")} />}</AppShell>;
 
   const copy = pageCopy[vm.screen];
   return <AppShell title={copy.title} subtitle={copy.subtitle} {...shellProps}>
-    {vm.screen === "dashboard" && <DashboardView access={vm.admin.access} onOpenSection={openSection} />}
-    {vm.screen === "management" && <ManagementView canAssignGroupOrders={can(vm.admin.permissions, "orders", "update")} onSelectSubsection={(subsection) => vm.selectManagementService(subsection.split("-")[0], subsection)} selectedSubsection={vm.selectedSubsection} canUpdateUsers={can(vm.admin.permissions, "users", "update")} canAddRestaurantCategory={can(vm.admin.permissions, "restaurants", "insert")} canBlockRestaurants={can(vm.admin.permissions, "restaurants", "delete")} canUnblockRestaurants={can(vm.admin.permissions, "restaurants", "update")} stationAccess={{ insert: can(vm.admin.permissions, "stations", "insert"), update: can(vm.admin.permissions, "stations", "update") }} />}
+    {vm.screen === "dashboard" && <DashboardView access={vm.admin.access} onOpenSection={openSection} adminName={vm.admin.name} />}
+    {vm.screen === "management" && <ManagementView canAssignGroupOrders={can(vm.admin.permissions, "orders", "update")} canModerateReplies={can(vm.admin.permissions, "restaurants", "update")} canEditQtyTypes={can(vm.admin.permissions, "restaurants", "update")} onSelectSubsection={(subsection) => vm.selectManagementService(subsection.split("-")[0], subsection)} selectedSubsection={vm.selectedSubsection} canUpdateUsers={can(vm.admin.permissions, "users", "update")} canAddRestaurantCategory={can(vm.admin.permissions, "restaurants", "insert")} canBlockRestaurants={can(vm.admin.permissions, "restaurants", "update") || can(vm.admin.permissions, "restaurants", "delete")} canUnblockRestaurants={can(vm.admin.permissions, "restaurants", "update")} stationAccess={{ insert: can(vm.admin.permissions, "stations", "insert"), update: can(vm.admin.permissions, "stations", "update") }} />}
     {vm.screen === "profile" && <ProfileView admin={vm.admin} onEdit={() => vm.navigate("edit-profile")} />}
   </AppShell>;
 }

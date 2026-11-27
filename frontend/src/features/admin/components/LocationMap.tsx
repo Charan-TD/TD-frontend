@@ -51,6 +51,7 @@ export function LocationMap({
   useEffect(() => {
     if (hasSaved || !API_KEY || !address) return;
     const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncs loading/result state with an async request or external resource owned by this effect.
     setStatus("loading");
     geocode(address, controller.signal)
       .then((point) => {

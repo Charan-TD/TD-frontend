@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 
+import { Icon } from "../../admin/components/Icon";
+
 const API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY;
 const AUTOCOMPLETE_URL = "https://api.geoapify.com/v1/geocode/autocomplete";
 const REVERSE_URL = "https://api.geoapify.com/v1/geocode/reverse";
@@ -71,9 +73,11 @@ export function StationLocationPicker({ latitude, longitude, onChange, disabled 
   const markerRef = useRef<import("leaflet").Marker | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
   const disabledRef = useRef(disabled);
-  disabledRef.current = disabled;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+    disabledRef.current = disabled;
+  });
 
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Place[]>([]);
@@ -138,10 +142,11 @@ export function StationLocationPicker({ latitude, longitude, onChange, disabled 
     import("leaflet").then((L) => {
       if (cancelled || !container.current) return;
       leafletRef.current = L;
-      const map = L.map(container.current, { scrollWheelZoom: true }).setView(
+      const map = L.map(container.current, { scrollWheelZoom: true, zoomControl: false }).setView(
         hasInitial ? [initialLat, initialLon] : DEFAULT_CENTER,
         hasInitial ? 16 : 5,
       );
+      L.control.zoom({ position: "topright" }).addTo(map);
       L.tileLayer(`${TILE_URL}?apiKey=${API_KEY}`, {
         maxZoom: 20,
         attribution:
@@ -172,6 +177,7 @@ export function StationLocationPicker({ latitude, longitude, onChange, disabled 
   useEffect(() => {
     const text = query.trim();
     if (!API_KEY || text.length < 3) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncs loading/result state with an async request or external resource owned by this effect.
       setSuggestions([]);
       setSearching(false);
       return;
@@ -213,12 +219,13 @@ export function StationLocationPicker({ latitude, longitude, onChange, disabled 
   return (
     <div className="station-picker">
       <label className="station-picker__field">
-        <span>Search location</span>
+        <span>Location</span>
         <div className="station-picker__search">
+          <Icon name="search" size={15} />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search the station or area, e.g. Secunderabad Railway Station"
+            placeholder="Search station or area"
             autoComplete="off"
             disabled={disabled}
           />
@@ -247,7 +254,7 @@ export function StationLocationPicker({ latitude, longitude, onChange, disabled 
         <textarea
           value={address}
           onChange={(event) => setAddress(event.target.value)}
-          placeholder="The address of the selected spot appears here"
+          placeholder="Filled in from the map pin"
           rows={3}
           disabled={disabled}
         />

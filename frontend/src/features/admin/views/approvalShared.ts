@@ -21,8 +21,11 @@ export const str = (value: unknown): string => {
 
 /** riders_owner is "Traindhaba" or "restaurant": who supplies the delivery riders. */
 export const ridersOwnerLabel = (value: unknown): string => {
-  const owner = typeof value === "string" ? value.trim().toLowerCase() : "";
-  return owner === "traindhaba" ? "Train Dhaba riders" : owner === "restaurant" ? "Restaurant's own riders" : "-";
+  // Tolerate "Train Dhaba", "train_dhaba", "TRAINDHABA", etc.
+  const owner = typeof value === "string" ? value.toLowerCase().replace(/[^a-z]/g, "") : "";
+  if (owner === "traindhaba" || owner === "platform") return "Train Dhaba riders";
+  if (owner === "restaurant" || owner === "own") return "Restaurant's own riders";
+  return "Not specified";
 };
 
 export const errorMessage = (error: unknown): string => {

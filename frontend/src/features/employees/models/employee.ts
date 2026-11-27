@@ -6,74 +6,30 @@ export type PortalSection =
   | "riders"
   | "orders"
   | "stations"
+  | "feedback"
   | "sales"
   | "marketing"
   | "reports";
 
+/** In the order the portal shows them (same as the sidebar). */
 export const PORTAL_SECTIONS: Array<{
   id: PortalSection;
   label: string;
   description: string;
+  icon: "dashboard" | "users" | "employee" | "store" | "rider" | "receipt" | "station" | "star" | "wallet" | "megaphone" | "file";
 }> = [
-    {
-      id: "dashboard",
-      label: "Dashboard",
-      description: "View the admin dashboard",
-    },
-    {
-      id: "users",
-      label: "Users",
-      description: "Manage registered users",
-    },
-    {
-      id: "employees",
-      label: "Employees",
-      description:
-        "Manage admin employees and access",
-    },
-    {
-      id: "restaurants",
-      label: "Restaurants",
-      description:
-        "Manage restaurant operations",
-    },
-    {
-      id: "riders",
-      label: "Riders",
-      description:
-        "Manage delivery riders",
-    },
-    {
-      id: "orders",
-      label: "Orders",
-      description:
-        "Manage food orders",
-    },
-    {
-      id: "stations",
-      label: "Stations",
-      description:
-        "Manage railway stations",
-    },
-    {
-      id: "sales",
-      label: "Transactions",
-      description:
-        "View sales and payment operations",
-    },
-    {
-      id: "marketing",
-      label: "Marketing",
-      description:
-        "Manage offers, coupons and campaigns",
-    },
-    {
-      id: "reports",
-      label: "Reports",
-      description:
-        "View sales, order, user and operational reports",
-    },
-  ];
+  { id: "dashboard", label: "Dashboard", description: "View the admin dashboard", icon: "dashboard" },
+  { id: "users", label: "Users", description: "Manage registered users", icon: "users" },
+  { id: "employees", label: "Employees", description: "Manage admin employees and access", icon: "employee" },
+  { id: "restaurants", label: "Restaurants", description: "Manage restaurant operations", icon: "store" },
+  { id: "riders", label: "Delivery Partners", description: "Manage delivery riders", icon: "rider" },
+  { id: "orders", label: "Orders", description: "Manage food orders", icon: "receipt" },
+  { id: "stations", label: "Stations", description: "Manage railway stations", icon: "station" },
+  { id: "feedback", label: "Feedback", description: "View and respond to customer feedback", icon: "star" },
+  { id: "sales", label: "Payments", description: "View sales and payment operations", icon: "wallet" },
+  { id: "marketing", label: "Marketing", description: "Manage offers, coupons and campaigns", icon: "megaphone" },
+  { id: "reports", label: "Analytics", description: "View sales, order, user and operational reports", icon: "file" },
+];
 
 export type AdminPermissionCode =
   | "read"

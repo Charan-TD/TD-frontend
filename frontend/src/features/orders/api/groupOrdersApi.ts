@@ -10,6 +10,7 @@ export type GroupOrder = {
   contactName: string;
   mobile: string;
   email: string | null;
+  pnr: string | null;
   groupSize: number | null;
   details: string;
   status: string;
@@ -17,6 +18,8 @@ export type GroupOrder = {
   restaurantName: string | null;
   createdAt: string | null;
 };
+export const GROUP_ORDER_STATUSES = ["PENDING", "CONTACTED", "CONFIRMED", "CANCELLED", "COMPLETED"] as const;
+export type GroupOrderStatus = (typeof GROUP_ORDER_STATUSES)[number];
 export type GroupOrderRestaurant = { id: string; name: string };
 export type GroupOrderItemSelection = { menuItemId: string; quantity: number };
 const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
@@ -41,6 +44,7 @@ export function normalizeGroupOrders(response: unknown): GroupOrder[] {
     contactName: text(row.contact_name) ?? "Not provided",
     mobile: text(row.mobile_number) ?? "Not provided",
     email: text(row.email),
+    pnr: text(row.pnr),
     groupSize: Number.isInteger(row.group_size) ? Number(row.group_size) : null,
     details: text(row.order_details) ?? "No order details provided.",
     status: text(row.status) ?? "PENDING",
@@ -88,8 +92,22 @@ export const groupOrdersApi = baseApi.injectEndpoints({
       },
       invalidatesTags: (_result, error) => error ? [] : [{ type: "Order", id: "GROUP_LIST" }],
     }),
+    /** PATCH /orders/group-orders/{grp_ord_id}/status: move a request through its lifecycle. */
+    updateGroupOrderStatus: builder.mutation<null, { grpOrdId: string; status: GroupOrderStatus }>({
+      async queryFn({ grpOrdId, status }, _api, _extra, baseQuery) {
+        const orderId = text(grpOrdId);
+        if (!orderId || groupOrderUuid(orderId)) return { error: { status: "CUSTOM_ERROR", error: "A public group order ID is required." } };
+        if (!GROUP_ORDER_STATUSES.includes(status)) return { error: { status: "CUSTOM_ERROR", error: "Choose a valid group order status." } };
+        const result = await baseQuery({ url: `/orders/group-orders/${encodeURIComponent(orderId)}/status`, method: "PATCH", body: { status } });
+        if (result.error) return { error: result.error };
+        const response = result.data as { success?: boolean; message?: string } | undefined;
+        if (response?.success === false) return { error: { status: "CUSTOM_ERROR", error: response.message ?? "Status update failed." } };
+        return { data: null };
+      },
+      invalidatesTags: (_result, error) => error ? [] : [{ type: "Order", id: "GROUP_LIST" }],
+    }),
   }),
   overrideExisting: true,
 });
 
-export const { useGetAdminGroupOrdersQuery, useGetGroupOrderRestaurantsQuery, useAssignGroupOrderRestaurantMutation } = groupOrdersApi;
+export const { useGetAdminGroupOrdersQuery, useGetGroupOrderRestaurantsQuery, useAssignGroupOrderRestaurantMutation, useUpdateGroupOrderStatusMutation } = groupOrdersApi;

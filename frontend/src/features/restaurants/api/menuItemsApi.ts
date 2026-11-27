@@ -161,18 +161,34 @@ export const menuItemsApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, { id }) => [{ type: "MenuItem", id }],
     }),
 
-    /** PATCH /admin/menu-items/{id}/status. A reason is only allowed when deactivating. */
+    /**
+     * PATCH /admin/menu-items/{id}/status with only the status ("ACTIVE" or "INACTIVE"). Turning an item off
+     * is then followed by PATCH /admin/menu-items/{id}/reason with a non-empty reason (max 500 characters).
+     * The server notifies the restaurant itself when the status changes.
+     */
     setMenuItemStatus: builder.mutation<
-      void,
+      null,
       { restaurantId: string; itemId: string; active: boolean; reason?: string }
     >({
-      query: ({ itemId, active, reason }) => ({
-        url: `/admin/menu-items/${itemId}/status`,
-        method: "PATCH",
-        body: active
-          ? { admin_is_available: true }
-          : { admin_is_available: false, ...(reason?.trim() ? { admin_item_inactive_reason: reason.trim() } : {}) },
-      }),
+      // Two calls: the status endpoint only accepts the status. A turned-off item then gets its reason
+      // from the separate /reason endpoint (which refuses an item that is not INACTIVE).
+      async queryFn({ itemId, active, reason }, _api, _extra, baseQuery) {
+        const status = await baseQuery({
+          url: `/admin/menu-items/${itemId}/status`,
+          method: "PATCH",
+          body: { admin_is_available: active ? "ACTIVE" : "INACTIVE" },
+        });
+        if (status.error) return { error: status.error };
+        if (!active) {
+          const saved = await baseQuery({
+            url: `/admin/menu-items/${itemId}/reason`,
+            method: "PATCH",
+            body: { reason: (reason ?? "").trim().slice(0, 500) },
+          });
+          if (saved.error) return { error: saved.error };
+        }
+        return { data: null };
+      },
       invalidatesTags: (_result, _error, { restaurantId }) => [{ type: "MenuItem", id: restaurantId }],
     }),
   }),

@@ -2,6 +2,7 @@
 
 import Alert from "@mui/material/Alert";
 import { useEffect, useState } from "react";
+import { colors } from "@/app/theme/tokens";
 
 export function TransientSuccessMessage({
   message,
@@ -14,6 +15,7 @@ export function TransientSuccessMessage({
 
   useEffect(() => {
     if (!message) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Shows the message, then hides it on a timer owned by this effect.
       setVisible(false);
       return;
     }
@@ -37,11 +39,11 @@ export function TransientSuccessMessage({
         py: 0.25,
         borderRadius: "10px",
         color: "#176b43",
-        backgroundColor: "#eaf7ef",
+        backgroundColor: colors.successWash,
         fontFamily: "inherit",
         fontSize: 14,
         fontWeight: 600,
-        "& .MuiAlert-icon": { color: "#16834a", py: 0.5 },
+        "& .MuiAlert-icon": { color: colors.success, py: 0.5 },
         "& .MuiAlert-message": { py: 0.75 },
       }}
     >

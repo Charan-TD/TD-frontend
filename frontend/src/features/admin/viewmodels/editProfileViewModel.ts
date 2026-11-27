@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AdminProfile } from "../models/portal";
+import { normalizeIndianMobile, validateIndianMobile } from "../components/PhoneInput";
 
 export type EditableAdminProfile = Pick<AdminProfile, "name" | "email" | "phone" | "location">;
 
@@ -14,7 +15,7 @@ export function useEditProfileViewModel(
   const [form, setForm] = useState<EditableAdminProfile>({
     name: admin.name,
     email: admin.email,
-    phone: admin.phone,
+    phone: normalizeIndianMobile(admin.phone),
     location: admin.location,
   });
 
@@ -22,7 +23,13 @@ export function useEditProfileViewModel(
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const submit = () => onSave(form);
+  const [showErrors, setShowErrors] = useState(false);
+  const phoneError = showErrors ? validateIndianMobile(form.phone) : "";
+
+  const submit = () => {
+    if (validateIndianMobile(form.phone)) return setShowErrors(true);
+    onSave({ ...form, phone: normalizeIndianMobile(form.phone) });
+  };
 
   return {
     admin,
@@ -30,6 +37,7 @@ export function useEditProfileViewModel(
     savedMessage,
     update,
     submit,
+    phoneError,
     onBack,
   };
 }

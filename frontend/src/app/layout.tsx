@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./design-system.css";
 import { StoreProvider } from "./providers/StoreProvider";
 import { MuiProvider } from "./providers/MuiProvider";
+import { SessionExpiredToast } from "../features/admin/components/SessionExpiredToast";
 import { TooltipLayer } from "../features/admin/components/TooltipLayer";
 
 export const metadata: Metadata = {
@@ -17,6 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <StoreProvider>{children}</StoreProvider>
         </MuiProvider>
         <TooltipLayer />
+        <SessionExpiredToast />
       </body>
     </html>
   );

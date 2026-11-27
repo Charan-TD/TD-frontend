@@ -1,10 +1,10 @@
 "use client";
 
-import { UserAvatar } from "../components/UserAvatar";
 import { useMemo, useState } from "react";
-import { RefreshButton } from "../components/RefreshButton";
-import { ManagementActionButton } from "../components/ManagementActionButton";
-import { SkeletonTable } from "../components/Skeleton";
+
+import { Icon } from "../components/Icon";
+import { SidePanel } from "../components/SidePanel";
+import { StatusSwitch } from "../components/StatusSwitch";
 import {
   useGetRestaurantMenuItemsQuery,
   useSetMenuItemStatusMutation,
@@ -12,10 +12,21 @@ import {
 } from "../../restaurants/api/menuItemsApi";
 import { errorMessage } from "./approvalShared";
 
-const REASON_LIMIT = 500;
+const NOTE_LIMIT = 400;
+const REASONS = ["Out of stock", "Customer complaints about this item", "Wrong price or details", "Food safety or quality issue", "Other"];
+const SEPARATOR = " — ";
+
+/** The API stores one reason string, so the chosen reason and the note are joined with a dash. */
+const splitReason = (value: string | null) => {
+  const [reason = "", ...note] = (value ?? "").split(SEPARATOR);
+  return { reason, note: note.join(SEPARATOR) };
+};
+
+function FoodMark({ type }: { type: string | null }) {
+  return type ? <span className={`td-food td-food--${type}`}><i /></span> : null;
+}
 
 type FoodFilter = "all" | "veg" | "egg" | "non_veg";
-type StatusFilter = "all" | "active" | "inactive";
 
 const FOOD_FILTERS: { id: FoodFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -24,55 +35,28 @@ const FOOD_FILTERS: { id: FoodFilter; label: string }[] = [
   { id: "non_veg", label: "Non-veg" },
 ];
 
-const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
-  { id: "all", label: "Any status" },
-  { id: "active", label: "Active" },
-  { id: "inactive", label: "Inactive" },
-];
-
-const FOOD_LABEL: Record<string, string> = { veg: "Veg", egg: "Egg", non_veg: "Non-veg" };
-
 // An admin status that was never set counts as active; only an explicit false is inactive.
-const isActive = (item: MenuItem) => item.adminAvailable !== false;
 const isInactive = (item: MenuItem) => item.adminAvailable === false;
 
 const rupees = (value: number | null) =>
   value == null ? "-" : `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
-function FoodType({ value }: { value: string | null }) {
-  if (!value) return <span className="menu-muted">-</span>;
-  return (
-    <span className={`food-type food-type--${value}`}>
-      <i aria-hidden="true" />
-      {FOOD_LABEL[value] ?? value}
-    </span>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="menu-field">
-      <span className="menu-field__label">{label}</span>
-      <div>{children}</div>
-    </div>
-  );
-}
+const UNCATEGORISED = "Uncategorised";
 
 export function RestaurantMenuPanel({ restaurantId, restaurantName }: { restaurantId: string; restaurantName: string }) {
-  const { data, isLoading, isFetching, isError, error, refetch } = useGetRestaurantMenuItemsQuery({
-    id: restaurantId,
-    name: restaurantName,
-  });
+  const { data, isLoading, isError, error } = useGetRestaurantMenuItemsQuery({ id: restaurantId, name: restaurantName });
   const items = useMemo(() => data?.items ?? [], [data]);
 
   const [setStatus, { isLoading: saving }] = useSetMenuItemStatusMutation();
   const [deactivating, setDeactivating] = useState<MenuItem | null>(null);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(REASONS[0]);
+  const [note, setNote] = useState("");
+  const [viewing, setViewing] = useState<MenuItem | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [food, setFood] = useState<FoodFilter>("all");
-  const [status, setStatusFilter] = useState<StatusFilter>("all");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const apply = async (item: MenuItem, active: boolean, why?: string) => {
     setActionError(null);
@@ -80,7 +64,7 @@ export function RestaurantMenuPanel({ restaurantId, restaurantName }: { restaura
     try {
       await setStatus({ restaurantId, itemId: item.id, active, reason: why }).unwrap();
       setDeactivating(null);
-      setReason("");
+      setViewing(null);
     } catch (err) {
       setActionError(errorMessage(err));
     } finally {
@@ -88,244 +72,162 @@ export function RestaurantMenuPanel({ restaurantId, restaurantName }: { restaura
     }
   };
 
-  const inStock = items.filter((item) => item.ownerAvailable).length;
-
+  const term = search.trim().toLowerCase();
   const visible = items.filter((item) => {
     if (food !== "all" && item.foodServed !== food) return false;
-    if (status === "active" && !isActive(item)) return false;
-    if (status === "inactive" && !isInactive(item)) return false;
-    const term = search.trim().toLowerCase();
     return !term || item.name.toLowerCase().includes(term) || (item.category ?? "").toLowerCase().includes(term) || (item.subCategory ?? "").toLowerCase().includes(term);
   });
 
-  const stat = (value: number) => (isLoading ? "…" : value);
+  // Group by category, keeping the order in which categories first appear.
+  const groups = new Map<string, MenuItem[]>();
+  visible.forEach((item) => {
+    const key = item.category ?? UNCATEGORISED;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  });
+
+  const toggleGroup = (name: string) => setCollapsed((prev) => { const next = new Set(prev); if (next.has(name)) next.delete(name); else next.add(name); return next; });
+  // While searching, show every matching group open.
+  const isOpen = (name: string) => !!term || !collapsed.has(name);
 
   return (
-    <div className="restaurant-menu">
-      <div className="menu-stats">
-        <div className="menu-stat menu-stat--total">
-          <span>Total items</span>
-          <strong>{stat(items.length)}</strong>
-        </div>
-        <div className="menu-stat menu-stat--in">
-          <span>In stock</span>
-          <strong>{stat(inStock)}</strong>
-        </div>
-        <div className="menu-stat menu-stat--out">
-          <span>Out of stock</span>
-          <strong>{stat(items.length - inStock)}</strong>
-        </div>
-      </div>
-
-      <div className="menu-toolbar">
-        <input
-          type="search"
-          className="menu-search"
-          placeholder="Search items or categories"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          aria-label="Search menu items"
-        />
-        <div className="menu-segment" role="group" aria-label="Food type">
+    <div className="td-rd-card td-rd-menu">
+      <div className="td-rd-menu-bar">
+        <label className="td-rd-search">
+          <Icon name="search" size={15} />
+          <input type="search" placeholder="Search items or categories" value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search menu items" />
+        </label>
+        <div className="td-rd-segment" role="group" aria-label="Food type">
           {FOOD_FILTERS.map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              className={food === filter.id ? "is-selected" : ""}
-              aria-pressed={food === filter.id}
-              onClick={() => setFood(filter.id)}
-            >
-              {filter.id !== "all" && <i className={`food-dot food-dot--${filter.id}`} aria-hidden="true" />}
+            <button key={filter.id} type="button" className={food === filter.id ? "is-active" : ""} aria-pressed={food === filter.id} onClick={() => setFood(filter.id)}>
+              {filter.id !== "all" && <span className={`td-food td-food--${filter.id}`}><i /></span>}
               {filter.label}
             </button>
           ))}
         </div>
-        <div className="menu-segment" role="group" aria-label="Admin status">
-          {STATUS_FILTERS.map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              className={status === filter.id ? "is-selected" : ""}
-              aria-pressed={status === filter.id}
-              onClick={() => setStatusFilter(filter.id)}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-        <RefreshButton refreshing={isFetching} label="the menu" onRefresh={() => refetch()} />
       </div>
 
       {actionError && !deactivating && <div className="api-state api-state--error">{actionError}</div>}
+      {isError && <div className="api-state api-state--error">Unable to load this restaurant&apos;s menu. {errorMessage(error)}</div>}
+      {isLoading && <div className="api-state">Loading menu…</div>}
 
-      {isError && (
-        <div className="api-state api-state--error">
-          Unable to load this restaurant&apos;s menu. {errorMessage(error)}
-        </div>
-      )}
-
-      {isLoading && <SkeletonTable columns={["Item", "Category", "Food type", "Prep time", "Price", "Stock", "Action"]} />}
-
-      {!isLoading && !isError && (
-        <ul className="menu-list">
-          {visible.length > 0 && (
-            <li className="menu-head" aria-hidden="true">
-              <span>Item</span>
-              <span>Category / Sub-category</span>
-              <span>Food type</span>
-              <span>Prep time</span>
-              <span>Price</span>
-              <span>Stock</span>
-              <span>Admin status</span>
-              <span className="menu-head__actions">Action</span>
-            </li>
-          )}
-          {visible.map((item) => {
-            const active = isActive(item);
+      {!isLoading && !isError && [...groups.entries()].map(([name, group]) => (
+        <section key={name} className="td-rd-group">
+          <button type="button" className="td-rd-group-head" aria-expanded={isOpen(name)} onClick={() => toggleGroup(name)}>
+            <span className={isOpen(name) ? "is-open" : undefined}><Icon name="chevron-down" size={14} /></span>
+            {name}
+          </button>
+          {isOpen(name) && group.map((item) => {
+            const off = isInactive(item);
             const busy = busyId === item.id;
-
+            const sub = [item.description, item.prepMinutes != null ? `${item.prepMinutes} min prep` : null, item.ownerAvailable ? null : "Out of stock"].filter(Boolean).join(" · ");
             return (
-              <li key={item.id} className={`menu-row${isInactive(item) ? " menu-row--inactive" : ""}`}>
-                <div className="menu-row__item">
-                  <UserAvatar name={item.name} imageUrl={item.imageUrl} size="medium" />
-                  <div>
-                    <strong>{item.name}</strong>
-                    {item.description && <p>{item.description}</p>}
-                  </div>
-                </div>
-
-                <Field label="Category">
-                  {item.category || item.subCategory ? (
-                    <span className="menu-category">
-                      {item.category && <strong>{item.category}</strong>}
-                      {item.subCategory && <span>{item.subCategory}</span>}
-                    </span>
-                  ) : (
-                    <span className="menu-muted">-</span>
-                  )}
-                </Field>
-
-                <Field label="Food type">
-                  <FoodType value={item.foodServed} />
-                </Field>
-
-                <Field label="Prep time">
-                  {item.prepMinutes != null ? `${item.prepMinutes} min` : <span className="menu-muted">-</span>}
-                </Field>
-
-                <Field label="Price">
-                  <span className="menu-price">
-                    {rupees(item.price)}
-                    {item.originalPrice != null && <s>{rupees(item.originalPrice)}</s>}
-                  </span>
-                </Field>
-
-                <Field label="Stock">
-                  <span className={`stock-pill${item.ownerAvailable ? " stock-pill--in" : " stock-pill--out"}`}>
-                    {item.ownerAvailable ? "In stock" : "Out of stock"}
-                  </span>
-                </Field>
-
-                <Field label="Admin status">
-                  <span
-                    className={`admin-pill admin-pill--${active ? "active" : "inactive"}`}
-                  >
-                    {active ? "Active" : "Inactive"}
-                  </span>
-                  {isInactive(item) && item.inactiveReason && (
-                    <div className="menu-item-reason">{item.inactiveReason}</div>
-                  )}
-                </Field>
-
-                <div className="menu-row__actions">
-                  {!active && (
-                    <ManagementActionButton
-                      action="activate"
-                      stateIndicator="blocked"
-                      ariaLabel={`Activate ${item.name}`}
-                      disabled={busy}
-                      tooltip={busy ? "Please wait, the item is being activated" : undefined}
-                      onClick={() => apply(item, true)}
-                    />
-                  )}
-                  {active && (
-                    <ManagementActionButton
-                      action="deactivate"
-                      stateIndicator="active"
-                      ariaLabel={`Deactivate ${item.name}`}
-                      disabled={busy}
-                      tooltip={busy ? "Please wait, the item is being deactivated" : undefined}
-                      onClick={() => {
-                        setActionError(null);
-                        setReason("");
-                        setDeactivating(item);
-                      }}
-                    />
+              <div key={item.id} className="td-rd-item">
+                <div className="td-rd-item-main">
+                  <b className="td-rd-item-name">
+                    {item.foodServed && <span className={`td-food td-food--${item.foodServed}`}><i /></span>}
+                    {item.name}
+                  </b>
+                  {sub && <small>{sub}</small>}
+                  {off && (
+                    <small className="td-rd-off">
+                      Turned off{item.inactiveReason && <> · {splitReason(item.inactiveReason).reason} · </>}<button type="button" onClick={() => setViewing(item)}>View reason</button>
+                    </small>
                   )}
                 </div>
-              </li>
+                <span className="td-rd-price">
+                  {rupees(item.price)}
+                  {item.originalPrice != null && <s>{rupees(item.originalPrice)}</s>}
+                </span>
+                <StatusSwitch
+                  checked={!off}
+                  onLabel="On"
+                  offLabel="Off"
+                  label={`${off ? "Turn on" : "Turn off"} ${item.name}`}
+                  disabled={busy}
+                  tooltip={busy ? "Please wait, the item is being updated" : undefined}
+                  onChange={() => {
+                    setActionError(null);
+                    if (off) void apply(item, true);
+                    else { setReason(REASONS[0]); setNote(""); setDeactivating(item); }
+                  }}
+                />
+              </div>
             );
           })}
-        </ul>
-      )}
+        </section>
+      ))}
 
       {!isLoading && !isError && visible.length === 0 && (
         <div className="api-state">
-          {items.length > 0 ? (
-            "No items match these filters."
-          ) : (
-            <>
-              No menu items found for {restaurantName}.
-              {data && (
-                <div className="menu-item-reason">
-                  Searched for restaurant {restaurantId}. The API returned {data.scanned} item
-                  {data.scanned === 1 ? "" : "s"}
-                  {data.restaurantNames.length > 0 && <> from: {data.restaurantNames.join(", ")}</>}.
-                </div>
-              )}
-            </>
-          )}
+          {items.length > 0 ? "No items match these filters." : `No menu items found for ${restaurantName}.`}
         </div>
       )}
 
       {deactivating && (
-        <div className="modal-backdrop" onClick={() => !saving && setDeactivating(null)}>
-          <div
-            className="modal-card modal-card--pop approval-detail"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Deactivate menu item"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h3>Deactivate {deactivating.name}?</h3>
-            <p>Customers will no longer be able to order this item until it is activated again.</p>
-            <label htmlFor="deactivate-reason">Reason (optional)</label>
-            <textarea
-              id="deactivate-reason"
-              rows={3}
-              maxLength={REASON_LIMIT}
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="e.g. Item does not meet quality standards"
-              autoFocus
-            />
-            {actionError && <div className="api-state api-state--error">{actionError}</div>}
-            <div className="modal-actions">
-              <button type="button" className="secondary-button" disabled={saving} onClick={() => setDeactivating(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="primary-button confirm-dialog-danger"
-                disabled={saving}
-                onClick={() => apply(deactivating, false, reason)}
-              >
-                {saving ? "Deactivating…" : "Deactivate"}
-              </button>
+        <div className="td-rd-modal-backdrop" role="presentation" onClick={() => !saving && setDeactivating(null)}>
+          <div className="td-rd-modal" role="dialog" aria-modal="true" aria-label="Turn off menu item" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <div><h3>Turn off this item?</h3><p>Customers won&apos;t be able to order it until it&apos;s turned back on.</p></div>
+              <button type="button" className="td-rd-x" aria-label="Close" disabled={saving} onClick={() => setDeactivating(null)}>×</button>
+            </header>
+            <div className="td-rd-modal-body">
+              <div className="td-rd-modal-item">
+                <div><b className="td-rd-item-name"><FoodMark type={deactivating.foodServed} />{deactivating.name}</b><small>{[deactivating.category, restaurantName].filter(Boolean).join(" · ")}</small></div>
+                <b>{rupees(deactivating.price)}</b>
+              </div>
+              <fieldset className="td-rd-reasons">
+                <legend>Reason <em>*</em></legend>
+                {REASONS.map((option) => (
+                  <label key={option}><input type="radio" name="off-reason" checked={reason === option} onChange={() => setReason(option)} />{option}</label>
+                ))}
+              </fieldset>
+              <label className="td-rd-note">
+                <span>Note <small>(shared with the restaurant)</small></span>
+                <textarea rows={3} maxLength={NOTE_LIMIT} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add details the restaurant should know" />
+              </label>
+              <div className="td-rd-info" role="note"><Icon name="info" size={16} /><span>The restaurant owner will be notified.</span></div>
+              {actionError && <div className="api-state api-state--error">{actionError}</div>}
             </div>
+            <footer>
+              <button type="button" className="td-btn td-btn--small" disabled={saving} onClick={() => setDeactivating(null)}>Cancel</button>
+              <button type="button" className="td-btn td-btn--primary td-btn--small" disabled={saving} onClick={() => apply(deactivating, false, note.trim() ? `${reason}${SEPARATOR}${note.trim()}` : reason)}>{saving ? "Turning off…" : "Turn off item"}</button>
+            </footer>
           </div>
         </div>
       )}
+
+      <SidePanel
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? "Item"}
+        header={viewing && (
+          <div className="td-rd-why-head">
+            <span className="td-rd-why-status">Status: <b>Off</b></span>
+            <h3><FoodMark type={viewing.foodServed} />{viewing.name}</h3>
+            <p>{[viewing.category, rupees(viewing.price), restaurantName].filter((part) => part && part !== "-").join(" · ")}</p>
+          </div>
+        )}
+        footer={viewing && (
+          <>
+            <button type="button" className="td-btn td-btn--small" onClick={() => setViewing(null)}>Close</button>
+            <button type="button" className="td-btn td-btn--primary td-btn--small" disabled={saving} onClick={() => void apply(viewing, true)}>{saving ? "Turning on…" : "Turn item back on"}</button>
+          </>
+        )}
+      >
+        {viewing && (() => {
+          const parts = splitReason(viewing.inactiveReason);
+          return (
+            <div className="td-rd-why">
+              <h4>Why it&apos;s off</h4>
+              <dl>
+                <div><dt>Reason</dt><dd>{parts.reason || "No reason recorded"}</dd></div>
+              </dl>
+              {parts.note && <div className="td-rd-why-note"><small>Note</small><p>{parts.note}</p></div>}
+              {actionError && <div className="api-state api-state--error">{actionError}</div>}
+            </div>
+          );
+        })()}
+      </SidePanel>
     </div>
   );
 }
